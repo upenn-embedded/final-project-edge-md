@@ -32,9 +32,11 @@ We want to build a translator between English and Spanish that is trained on the
 The motivation of our project is that several people in the US and in 3rd world countries require a translator to act as an intermediary between doctors and patients. Not only is this dangerous from a HIPAA standpoint but it drastically minimizes the number of patients who can help because of the limitation of doctors who know a patient’s language or a translator who knows both the doctor’s and patient’s language. We hope that with a highly accurate translator that’s arguably cheap and easy to carry around, we can help doctors work with more patients at either clinics in the US or in 3rd world countries where NGOs can send more doctors to help with translation programs. 
 ### 3. System Block Diagram
 
+![Block Diagram](media/blockDiagram.png)
+
 ### 4. Design Sketches
 
-ADD IMAGE HERE
+![Design Sketch](media/firstSketch.png)
 
 ### 5. Software Requirements Specification (SRS)
 
@@ -53,16 +55,18 @@ System Requirement 6: The system must detect low confidence or failed translatio
 
 **5.1 Definitions, Abbreviations**
 
-Here, you will define any special terms, acronyms, or abbreviations you plan to use for hardware
+N/A
 
 **5.2 Functionality**
 
-| ID     | Description                                                                                                                                                                                                              |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| SRS-01 | The IMU 3-axis acceleration will be measured with 16-bit depth every 100 milliseconds +/-10 milliseconds                                                                                                                 |
-| SRS-02 | The distance sensor shall operate and report values at least every .5 seconds.                                                                                                                                           |
-| SRS-03 | Upon non-nominal distance detected (i.e., the trap mechanism has changed at least 10 cm from the nominal range), the system shall be able to detect the change and alert the user in a timely manner (within 5 seconds). |
-| SRS-04 | Upon a request from the user, the system shall get an image from the internal camera and upload the image to the user system within 10s.                                                                                 |
+| ID     | Description |
+| ------ | ----------- |
+| SRS-01 | Convert spoken English or Spanish input into text with at least 90% accuracy under low-noise conditions, measured against ground-truth transcriptions. |
+| SRS-02 | Translate text between English and Spanish with at least 85% semantic accuracy on a predefined set of medical phrases and sentences. |
+| SRS-03 | Apply a medical dictionary so critical medical terms are translated correctly in at least 95% of test cases. |
+| SRS-04 | Produce translated audio output within 15 seconds of input completion, measured end-to-end from speech input to playback. |
+| SRS-05 | Support basic conversational exchanges by preserving meaning across at least two consecutive sentences. |
+| SRS-06 | Detect low-confidence or failed translations and trigger an error state or retry in at least 90% of such cases. |
 
 ### 6. Hardware Requirements Specification (HRS)
 
@@ -75,16 +79,17 @@ System Requirement 3: The system must support real time or near real time proces
 
 **6.1 Definitions, Abbreviations**
 
-Here, you will define any special terms, acronyms, or abbreviations you plan to use for hardware
+N/A
 
 **6.2 Functionality**
 
-| ID     | Description                                                                                                                        |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| HRS-01 | A distance sensor shall be used for obstacle detection. The sensor shall detect obstacles at a maximum distance of at least 10 cm. |
-| HRS-02 | A noisemaker shall be inside the trap with a strength of at least 55 dB.                                                           |
-| HRS-03 | An electronic motor shall be used to reset the trap remotely and have a torque of 40 Nm in order to reset the trap mechanism.      |
-| HRS-04 | A camera sensor shall be used to capture images of the trap interior. The resolution shall be at least 480p.                       |
+| ID     | Description |
+| ------ | ----------- |
+| HRS-01 | LEDs shall indicate system state, including power, active listening, processing, and error conditions (e.g., failed or low-confidence translations). |
+| HRS-02 | The audio input path shall capture clear speech in environments with minimal background noise (microphone and conditioning suitable for clinical-style use). |
+| HRS-03 | The system shall support real-time or near-real-time operation so speech is translated and played back with minimal delay. |
+| HRS-04 | Tactile push buttons shall provide user control aligned with the pipeline (e.g., initiating recording and other modes) via GPIO to the STM32. |
+| HRS-05 | The audio output path shall drive a speaker from the processed translation (e.g., I2S amplifier and speaker) for intelligible playback. |
 
 ### 7. Bill of Materials (BOM)
 
@@ -107,23 +112,16 @@ Further we’ll need a logic analyzer to debug the audio as we did in one of the
 For the final demo, we will present a complete end to end demonstration of the device across several realistic use cases. This will include a single sentence translation to showcase basic functionality and latency, as well as a multi turn conversation to demonstrate the system’s ability to handle continuous interaction between a doctor and patient. In addition, we will present a failure scenario in which the system encounters a low confidence or incorrect translation, followed by a demonstration of how it detects the issue and initiates a recovery or retry process.
 
 
-Audio lead handles microphone and speaker integration, software lead connects translation pipeline, team tests end to end functionality
-
 ### 9. Sprint Planning
 
-| Milestone  | Functionality Achieved                                 | Distribution of Work                                 |
-| ---------- | ------------------------------------------------------ | -----------------------------------------------------|
-| Sprint #1  |  Set up development environment, assign roles,         | Software lead focuses on model setup and testing, 
-                gather hardware components, and implement a           | hardware lead gathers and verifies components,                                                                       basic translation pipeline using a pretrained model   | team collaborates on initial pipeline integration
-                (Whisper or Hugging Face)                             |
-                                                                      |
-                                                                      |
-| Sprint #2  |  Implement and test audio input and output by          | Audio lead handles micropjone and speaker intregration, 
-              integrating microphone and speaker with Raspberry Pi;   | software lead conects translation pipeline, team tests
-              connect audio  pipeline to translation system for spoken|  end to end functionality
-              input to translated output                              |
-| MVP Demo   |                                                        |                                                      |
-| Final Demo |                                                        |                                                      |
+The project is divided into four weekly sprints leading up to the April 24 deadline.
+
+| Milestone | Functionality Achieved | Distribution of Work |
+| --------- | ---------------------- | -------------------- |
+| Sprint #1 | Set up the development environment; assign roles; gather hardware components; implement a basic translation pipeline using a pretrained model (e.g., Whisper or a Hugging Face English-to-Spanish model). | Software lead focuses on model setup and testing; hardware lead gathers and verifies components; team collaborates on initial pipeline integration. |
+| Sprint #2 | Implement and test audio input and output by integrating the microphone and speaker with the Raspberry Pi; connect the translation pipeline so spoken input produces translated output. | Audio lead handles microphone and speaker integration; software lead connects the translation pipeline; team tests end-to-end functionality. |
+| MVP Demo | Integrate the full hardware system (STM32, LEDs, buttons); improve reliability by handling noise, refining translations with the dictionary, and ensuring stable real-time performance. | Team works across hardware (STM32, LEDs, buttons), software (noise, dictionary, real-time behavior), and integration testing. |
+| Final Demo | Debug and polish the system; prepare demo scenarios; finalize documentation; demonstrate simple translations, continuous conversation, and recovery from failed translations. | One member on translation model and software; one on audio processing and integration; one on hardware and system control; regular check-ins so all components work together. |
 
 **This is the end of the Project Proposal section. The remaining sections will be filled out based on the milestone schedule.**
 
@@ -158,16 +156,24 @@ If you’ve never made a GitHub pages website before, you can follow this webpag
 
 #### 3.1 Software Requirements Specification (SRS) Results
 
-| ID     | Description                                                                                               | Validation Outcome                                                                          |
-| ------ | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| SRS-01 | The IMU 3-axis acceleration will be measured with 16-bit depth every 100 milliseconds +/-10 milliseconds. | Confirmed, logged output from the MCU is saved to "validation" folder in GitHub repository. |
+| ID     | Description | Validation Outcome |
+| ------ | ----------- | ------------------ |
+| SRS-01 | Convert spoken English or Spanish input into text with at least 90% accuracy under low-noise conditions, measured against ground-truth transcriptions. | TBD — document method, test set, and results in the `validation` folder (e.g., logs, screenshots). |
+| SRS-02 | Translate text between English and Spanish with at least 85% semantic accuracy on a predefined set of medical phrases and sentences. | TBD — document evaluation protocol and outcomes in the `validation` folder. |
+| SRS-03 | Apply a medical dictionary so critical medical terms are translated correctly in at least 95% of test cases. | TBD — document dictionary tests and results in the `validation` folder. |
+| SRS-04 | Produce translated audio output within 15 seconds of input completion, measured end-to-end from speech input to playback. | TBD — document timing measurements in the `validation` folder. |
+| SRS-05 | Support basic conversational exchanges by preserving meaning across at least two consecutive sentences. | TBD — document scenario tests in the `validation` folder. |
+| SRS-06 | Detect low-confidence or failed translations and trigger an error state or retry in at least 90% of such cases. | TBD — document failure-injection tests in the `validation` folder. |
 
 #### 3.2 Hardware Requirements Specification (HRS) Results
 
-| ID     | Description                                                                                                                        | Validation Outcome                                                                                                      |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| HRS-01 | A distance sensor shall be used for obstacle detection. The sensor shall detect obstacles at a maximum distance of at least 10 cm. | Confirmed, sensed obstacles up to 15cm. Video in "validation" folder, shows tape measure and logged output to terminal. |
-|        |                                                                                                                                    |                                                                                                                         |
+| ID     | Description | Validation Outcome |
+| ------ | ----------- | ------------------ |
+| HRS-01 | LEDs shall indicate system state, including power, active listening, processing, and error conditions (e.g., failed or low-confidence translations). | TBD — photo or video of each indicated state in the `validation` folder. |
+| HRS-02 | The audio input path shall capture clear speech in environments with minimal background noise (microphone and conditioning suitable for clinical-style use). | TBD — audio samples or analyzer captures in the `validation` folder. |
+| HRS-03 | The system shall support real-time or near-real-time operation so speech is translated and played back with minimal delay. | TBD — latency notes or logs in the `validation` folder. |
+| HRS-04 | Tactile push buttons shall provide user control aligned with the pipeline (e.g., initiating recording and other modes) via GPIO to the STM32. | TBD — demo or scope/GPIO trace in the `validation` folder. |
+| HRS-05 | The audio output path shall drive a speaker from the processed translation (e.g., I2S amplifier and speaker) for intelligible playback. | TBD — playback demo or measurements in the `validation` folder. |
 
 ### 4. Conclusion
 
