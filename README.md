@@ -25,13 +25,31 @@ https://github.com/upenn-embedded/final-project-edge-md/
 
 ### 1. Abstract
 
+We want to build a translator between English and Spanish that is trained on the cloud and provides inference on the edge for doctors providing services to patients. Our end product should be a box that is able to be taken to any location and then takes in audio input, dissects through noise and outputs a clear translation in the corresponding language.  
+
 ### 2. Motivation
 
+The motivation of our project is that several people in the US and in 3rd world countries require a translator to act as an intermediary between doctors and patients. Not only is this dangerous from a HIPAA standpoint but it drastically minimizes the number of patients who can help because of the limitation of doctors who know a patient’s language or a translator who knows both the doctor’s and patient’s language. We hope that with a highly accurate translator that’s arguably cheap and easy to carry around, we can help doctors work with more patients at either clinics in the US or in 3rd world countries where NGOs can send more doctors to help with translation programs. 
 ### 3. System Block Diagram
 
 ### 4. Design Sketches
 
+ADD IMAGE HERE
+
 ### 5. Software Requirements Specification (SRS)
+
+The software system will focus on enabling accurate and efficient English to Spanish translation using a combination of a pretrained speech recognition and translation model along with domain specific correction tools. The pipeline will consist of speech to text processing, translation, and post processing to ensure medical accuracy. A pretrained model such as Whisper or a Hugging Face translation model will be used for fast inference on the edge device, while a medical dictionary and supporting language rules will be applied to refine outputs and correct potential errors in terminology and phrasing.
+System Requirement 1: The system must convert spoken English or Spanish input into text with at least 90 percent accuracy under low noise conditions, measured by comparing transcriptions to ground truth samples.
+
+System Requirement 2: The system must translate input text between English and Spanish with at least 85 percent semantic accuracy, evaluated using a predefined set of medical phrases and sentences.
+
+System Requirement 3: The system must apply a medical dictionary to correct key terminology, ensuring that critical medical terms are translated correctly in at least 95 percent of test cases.
+
+System Requirement 4: The system must produce translated audio output within 15 seconds of input completion, measured as end to end latency from speech input to audio playback.
+
+System Requirement 5: The system must handle basic conversational exchanges by maintaining context across at least two consecutive sentences without significant loss of meaning.
+
+System Requirement 6: The system must detect low confidence or failed translations and trigger an error state or retry mechanism in at least 90 percent of such cases.
 
 **5.1 Definitions, Abbreviations**
 
@@ -48,6 +66,13 @@ Here, you will define any special terms, acronyms, or abbreviations you plan to 
 
 ### 6. Hardware Requirements Specification (HRS)
 
+The hardware system must provide clear feedback on the device’s state and support a full audio input to output pipeline. Upon a button press, the device should begin recording audio input through the microphone, convert the analog signal to digital using an ADC, process the data through the translation model, and then output the translated result by converting the signal back to analog through a speaker.
+
+System Requirement 1: The device must use LEDs to indicate system states, including power status, active listening, processing, and error conditions such as failed or low confidence translations.
+System Requirement 2: The audio input system must reliably capture clear speech in environments with minimal background noise.
+System Requirement 3: The system must support real time or near real time processing, ensuring that input speech is translated and played back with minimal delay.
+
+
 **6.1 Definitions, Abbreviations**
 
 Here, you will define any special terms, acronyms, or abbreviations you plan to use for hardware
@@ -63,8 +88,23 @@ Here, you will define any special terms, acronyms, or abbreviations you plan to 
 
 ### 7. Bill of Materials (BOM)
 
+Raspberry Pi 5, 8GB RAM
+Official RPi 5 27W USB-C power supply
+MicroSD card, 128GB, A2 rated (Samsung EVO Plus or similar)
+STM32F446RE Nucleo-64 development board 
+INMP441 I2S MEMS microphone breakout board 
+MAX98357A I2S Class-D amplifier breakout board
+3W 4Ω speaker, 40mm driver
+5 resistors, 220Ω (for LEDs)
+4 resistors, 10kΩ (pull-ups for buttons)
+4 LEDs of different colors 
+4 tactile push buttons (12mm, through-hole for breadboard) 
+Further we’ll need a logic analyzer to debug the audio as we did in one of the previous worksheets. 
+
 
 ### 8. Final Demo Goals
+
+For the final demo, we will present a complete end to end demonstration of the device across several realistic use cases. This will include a single sentence translation to showcase basic functionality and latency, as well as a multi turn conversation to demonstrate the system’s ability to handle continuous interaction between a doctor and patient. In addition, we will present a failure scenario in which the system encounters a low confidence or incorrect translation, followed by a demonstration of how it detects the issue and initiates a recovery or retry process.
 
 
 ### 9. Sprint Planning
