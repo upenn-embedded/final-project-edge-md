@@ -42,7 +42,7 @@ set(cpu_PARAMS
 
 # Sources
 set(sources_SRCS
-	${CMAKE_CURRENT_SOURCE_DIR}/Src/main_bridge.c
+	${CMAKE_CURRENT_SOURCE_DIR}/Src/main_uart_rpi_rx.c
 )
 
 # Include directories for all compilers
