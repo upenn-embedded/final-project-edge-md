@@ -10,7 +10,7 @@
 
 /*      Base addresses      */
 #define RCC_BASE    0x40023800UL
-#define GPIOA_BASE  0x40020000UL
+#define GPIOA_BASE  0x40020000UL 
 
 /*      RCC registers      */
 #define RCC_AHB1ENR (*(volatile uint32_t *)(RCC_BASE + 0x30))
