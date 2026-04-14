@@ -145,6 +145,9 @@ We're now moving towards creating a consistent stream of data from the microphon
 
 ## Sprint Review #2
 
+![alt text](media/IMG_1733.HEIC)
+
+
 ### Last week's progress
 We selected LLaMA 3.2 3B as our core translation model, which sits between the Whisper STT and Piper TTS stages in the pipeline. This model was chosen to balance clinical translation accuracy against the memory and compute constraints of the Raspberry Pi 5, where it will run inference via llama.cpp with Q4_K_M quantization. We began preparing the fine-tuning workflow using Unsloth and TRL's SFTTrainer with LoRA adapters.
 On the data side, we identified and sourced several datasets to support our staged training approach:
