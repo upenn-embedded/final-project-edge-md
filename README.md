@@ -146,10 +146,33 @@ We're now moving towards creating a consistent stream of data from the microphon
 ## Sprint Review #2
 
 ### Last week's progress
+We selected LLaMA 3.2 3B as our core translation model, which sits between the Whisper STT and Piper TTS stages in the pipeline. This model was chosen to balance clinical translation accuracy against the memory and compute constraints of the Raspberry Pi 5, where it will run inference via llama.cpp with Q4_K_M quantization. We began preparing the fine-tuning workflow using Unsloth and TRL's SFTTrainer with LoRA adapters.
+On the data side, we identified and sourced several datasets to support our staged training approach:
+
+* Monolingual medical corpora (PubMed abstracts, Scielo articles, MedlinePlus content) for continued pretraining on clinical vocabulary
+* Parallel Spanish-English medical sentence pairs, augmented with terminology from our UMLS/SNOMED CT/MeSH glossary, for supervised fine-tuning
+* A custom preposition-sensitive evaluation set for measuring clinical translation accuracy alongside SacreBLEU
+
+We also made a hardware communication change, switching from an SPI master/slave configuration to UART for the STM32-to-Pi link. The SPI setup was introducing timing complications with the STM32 acting as a slave device, and UART gives us a more symmetric, predictable interface with simpler flow control. This reduces a full category of synchronization bugs we were chasing.
 
 ### Current state of project
 
+We are working through three parallel integration tasks: stabilizing the UART communication protocol between the STM32 and Pi, wiring the translation model into the pipeline so it ingests Whisper's transcription output and produces English text, and routing that output back to the STM32 for display and TTS playback through Piper.
+
 ### Next week's plan
+
+Our focus is on closing the loop from audio input to translated output on real hardware.
+
+* Get UART communication fully stable and reliable end-to-end between the STM32 and Pi, with consistent framing and error handling.
+* Integrate the display so that both the original Spanish transcription and the English translation render on screen simultaneously.
+* Validate that Whisper.cpp is transcribing Spanish audio accurately and that Piper is producing clean, intelligible English speech output
+* Run an initial quantitative evaluation of the translation model — SacreBLEU scores against our test set, accuracy checks against the medical glossary via 
+FlashText lookup, and results from our preposition-sensitive clinical evaluation set to identify where the model is weakest
+* Use those evaluation results to prioritize the next round of fine-tuning adjustments
+
+
+
+
 
 ## MVP Demo
 
