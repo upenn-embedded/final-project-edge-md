@@ -3,13 +3,18 @@ import wave
 import struct
 import time
 
-# At 115200 baud, each 3-byte packet takes 30 bit-times = ~260 µs
-# Max throughput: ~3840 packets/sec — use this as actual sample rate.
-# To get true 8000 Hz, the STM32 needs a timer gating ADC reads (see note below).
-SAMPLE_RATE = 3840
+# 2 bytes per sample, each UART byte = 10 bits (8 data + start + stop)
+# Max sample rate = 115200 / (2 * 10) = 5760 Hz
+SAMPLE_RATE = 5760
 RECORD_SECONDS = 10
 PORT = '/dev/ttyAMA0'
 BAUD = 115200
+
+# SPW2430 output is biased at VCC/2 (~2048 ADC counts).
+# Voice swings only ~±50 counts at normal distance.
+# Gain amplifies that small swing to fill the 16-bit range.
+BIAS = 2048
+GAIN = 20
 
 def record(filename):
     s = serial.Serial(PORT, BAUD, timeout=2)
@@ -19,18 +24,19 @@ def record(filename):
     print(f"Recording {RECORD_SECONDS}s ({total} samples) -> {filename}...")
     t0 = time.time()
     while len(samples) < total:
+        # Sync: scan for a byte with bit7=1 (header byte)
         b = s.read(1)
-        if len(b) == 0:
+        if not b or not (b[0] & 0x80):
             continue
-        if b[0] == 0xFF:
-            data = s.read(2)
-            if len(data) < 2:
-                continue
-            val = data[0] | (data[1] << 8)
-            if val <= 4095:
-                # Map 0-4095 to signed 16-bit (-32768 to 32767)
-                signed = int((val / 4095.0) * 65535) - 32768
-                samples.append(signed)
+        # Read the data byte — must have bit7=0
+        d = s.read(1)
+        if not d or (d[0] & 0x80):
+            continue
+        # Reconstruct 12-bit ADC value
+        val = ((b[0] & 0x3F) << 6) | (d[0] & 0x3F)
+        # Center on bias, amplify, clamp to 16-bit signed range
+        signed = max(-32768, min(32767, (val - BIAS) * GAIN))
+        samples.append(signed)
     elapsed = time.time() - t0
     actual_rate = len(samples) / elapsed
     print(f"Collected {len(samples)} samples in {elapsed:.2f}s (actual rate: {actual_rate:.0f} Hz)")
