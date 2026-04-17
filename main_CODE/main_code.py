@@ -33,7 +33,7 @@ WHISPER_BIN    = os.path.expanduser('~/whisper.cpp/build/bin/whisper-cli')
 WHISPER_MODEL  = os.path.expanduser('~/whisper.cpp/models/ggml-small.en.bin')
 
 PIPER_BIN      = os.path.expanduser('~/piper/piper/piper')
-PIPER_MODEL    = os.path.expanduser('~/piper/models/es_MX-claude-high.onnx')
+PIPER_MODEL    = os.path.expanduser('~/piper/es_MX-claude-high.onnx')
 
 OUTPUT_DIR     = os.path.expanduser('~/final-project-edge-md/main_CODE/output')
 
