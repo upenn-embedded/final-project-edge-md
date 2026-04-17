@@ -16,9 +16,9 @@ def transcribe(wav_path: str) -> str:
         raise FileNotFoundError(f"WAV file not found: {wav_path}")
 
     # Output file prefix: same name as WAV, no extension
-    out_prefix = os.path.splitext(wav_path)[0]
+    out_prefix = os.path.splitext(wav_path)[0] + '_transcription'
 
-    result = subprocess.run([
+    result = subprocess.run([ # Here we are swithcing to use the whisper command line. Note this is because Whisper.cpp is a C++ file
         WHISPER_BIN,
         '-m', WHISPER_MODEL,
         '-f', wav_path,
