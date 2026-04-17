@@ -24,7 +24,14 @@ def transcribe(wav_path: str) -> str:
         '-of', out_prefix, 
         ], capture_output=True, text=True)
 
-    return result.returncode, result.stdout, result.stderr, out_prefix + '.txt'
+    txt_file = out_prefix + '.txt'
+    if not os.path.exists(txt_file):
+        raise RuntimeError(f"Whisper failed:\n{result.stderr}")
+
+    with open(txt_file, 'r') as f:
+        text = f.read().strip()
+
+    return text, txt_file
 
 
 
