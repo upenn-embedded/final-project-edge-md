@@ -120,11 +120,13 @@ def transcribe(wav_path):
         '-of', out_prefix,
     ], capture_output=True, text=True)
 
-    txt_file = out_prefix + '.txt'
-    if not os.path.exists(txt_file):
-        raise RuntimeError(f"Whisper failed:\n{result.stderr}")
+    if result.returncode != 0:
+        print("whisper.cpp stderr:")
+        print(result.stderr[-500:])
+        raise RuntimeError("Whisper failed")
 
-    with open(txt_file, 'r') as f:
+    txt_file = out_prefix + '.txt'
+    with open(txt_file) as f:
         text = f.read().strip()
 
     print(f"  English: {text}")
