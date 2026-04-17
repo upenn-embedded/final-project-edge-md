@@ -14,7 +14,7 @@ def transcribe(wav_path: str) -> str:
     # Output file prefix: same name as WAV, no extension
     out_prefix = os.path.splitext(wav_path)[0] + '_transcription' 
 
-    result = subprocess.run([
+    result = subprocess.run([# Here we are swithcing to use the whisper command line. Note this is because Whisper.cpp is a C++ file
         WHISPER_BIN, 
         '-m', WHISPER_MODEL, 
         '-f', wav_path, 
@@ -22,16 +22,19 @@ def transcribe(wav_path: str) -> str:
         '--no-timestamps',
         '-otxt', 
         '-of', out_prefix, 
-        ], capture_output=True, text=True)
+        ], capture_output=True, text=True)  
 
-    txt_file = out_prefix + '.txt'
-    if not os.path.exists(txt_file):
-        raise RuntimeError(f"Whisper failed:\n{result.stderr}")
-
-    with open(txt_file, 'r') as f:
+    if result.returncode != 0:
+        print("whisper.cpp stderr:")
+        print(result.stderr[-500:])
+        raise RuntimeError("Whisper failed") 
+    
+    txt_path = out_prefix + '.txt' # Convert to .txt path so that we can read with llama
+    with open(txt_path) as f:
         text = f.read().strip()
+    return text, txt_path
 
-    return text, txt_file
+
 
 
 
