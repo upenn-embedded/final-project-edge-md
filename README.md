@@ -158,21 +158,6 @@ On the data side, we identified and sourced several datasets to support our stag
 
 We also made a hardware communication change, switching from an SPI master/slave configuration to UART for the STM32-to-Pi link. The SPI setup was introducing timing complications with the STM32 acting as a slave device, and UART gives us a more symmetric, predictable interface with simpler flow control. This reduces a full category of synchronization bugs we were chasing.
 
-### Audio Capture Pipeline — STM32 ADC + UART
-
-To establish a working audio input pipeline, we implemented analog microphone capture on the STM32 Nucleo-F411RE using the SPW2430 MEMS microphone connected to PA0 (ADC1 Channel 0). The STM32 continuously samples the microphone output at 12-bit resolution (0–4095) and frames each sample as a 3-byte binary packet — a `0xFF` sync byte followed by the two ADC bytes — transmitted over USART1 (PA9) at 9600 baud to the Raspberry Pi.
-
-On the Raspberry Pi side, a Python script listens on `/dev/ttyAMA10`, reconstructs each 12-bit ADC value from the binary packets, scales it to 16-bit signed PCM, and saves 10-second recordings as standard WAV files at 8kHz. This gives us a verified, end-to-end audio capture pipeline from microphone to file, which feeds directly into the Whisper STT stage.
-
-**Connections:**
-
-| SPW2430 | STM32 | RPi |
-|---------|-------|-----|
-| 3V | 3.3V | — |
-| GND | GND | GND |
-| AC | PA0 (ADC1 CH0, CN7 Pin 28) | — |
-| — | PA9 (USART1 TX, CN10 Pin 1) | Pin 10 (GPIO15 RXD) |
-
 ### Current state of project
 
 We are working through three parallel integration tasks: stabilizing the UART communication protocol between the STM32 and Pi, wiring the translation model into the pipeline so it ingests Whisper's transcription output and produces English text, and routing that output back to the STM32 for display and TTS playback through Piper.
@@ -226,6 +211,21 @@ If you’ve never made a GitHub pages website before, you can follow this webpag
 | HRS-04 | Tactile push buttons shall provide user control aligned with the pipeline (e.g., initiating recording and other modes) via GPIO to the STM32.                | TBD — demo or scope/GPIO trace in the `validation` folder.               |
 | HRS-05 | The audio output path shall drive a speaker from the processed translation (e.g., I2S amplifier and speaker) for intelligible playback.                      | TBD — playback demo or measurements in the `validation` folder.          |
 
-### 4. Conclusion
+### 4.1 Audio Capture Pipeline — STM32 ADC + UART
+
+To establish a working audio input pipeline, we implemented analog microphone capture on the STM32 Nucleo-F411RE using the SPW2430 MEMS microphone connected to PA0 (ADC1 Channel 0). The STM32 continuously samples the microphone output at 12-bit resolution (0–4095) and frames each sample as a 3-byte binary packet — a `0xFF` sync byte followed by the two ADC bytes — transmitted over USART1 (PA9) at 9600 baud to the Raspberry Pi.
+
+On the Raspberry Pi side, a Python script listens on `/dev/ttyAMA10`, reconstructs each 12-bit ADC value from the binary packets, scales it to 16-bit signed PCM, and saves 10-second recordings as standard WAV files at 8kHz. This gives us a verified, end-to-end audio capture pipeline from microphone to file, which feeds directly into the Whisper STT stage.
+
+### 4.2 **Connections:**
+
+| SPW2430 | STM32 | RPi |
+|---------|-------|-----|
+| 3V | 3.3V | — |
+| GND | GND | GND |
+| AC | PA0 (ADC1 CH0, CN7 Pin 28) | — |
+| — | PA9 (USART1 TX, CN10 Pin 1) | Pin 10 (GPIO15 RXD) |
+
+### 5. Conclusion
 
 ## References
