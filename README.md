@@ -177,36 +177,27 @@ FlashText lookup, and results from our preposition-sensitive clinical evaluation
 
 ### 1. Video
 
-<!-- GitHub's markdown renderer does not support <video> tags. If viewing on GitHub, click the link below. -->
-<!-- In Cursor / VS Code markdown preview the player below will work directly. -->
+[Video showing the pipline, translation is in the next linked video](https://docs.google.com/videos/d/17sOfWx8P6tt43unIRTZpr-duvIzOP1j-f8Yf377OOpQ/edit?usp=sharing)
 
-<video src="MVP_DEMO.MOV.mp4" controls width="720">
-  <a href="MVP_DEMO.MOV.mp4">▶ Watch MVP Demo (click to download/play)</a>
-</video>
+### 2. Audio translation
 
-> **GitHub viewers:** click [▶ MVP\_DEMO.MOV.mp4](media/MVP_DEMO.MOV.mp4) to download and play the demo video.
+The clip below demonstrates the end-to-end audio pipeline, where we first get the raw microphone capture fed which is fed into the translation system and the Piper TTS output.
 
-### 2. Audio Samples
-
-The clips below demonstrate the end-to-end audio pipeline — raw microphone capture fed into the translation system and the Piper TTS output.
-
-**Input — raw microphone recording:**
-
-<audio src="wav%20files/recording.wav" controls>
-  <a href="wav%20files/recording.wav">recording.wav</a>
-</audio>
-
-**Output — Piper TTS translated speech:**
-
-<audio src="wav%20files/piper.wav" controls>
-  <a href="wav%20files/piper.wav">piper.wav</a>
-</audio>
+[Another video show casing the audio files generated during our MVP Demo](https://drive.google.com/file/d/18vrqvzDlqOkMEG6KEYrlbQ28RQISYc8a/view?usp=sharing)
 
 ### 3. Images
 
+![MVP Demo setup](media/IMG_1792.jpg)
+
+![MVP Demo setup](media/IMG_1789.jpg)
+
+![MVP Demo setup](media/IMG_1785.jpg)
+
+![MVP Demo setup](media/IMG_1780.jpg)
+
 ### 4. Results
 
-We were able to work through the major components of our project in the MVP DEMO with the components that we had access to. Given that we were still waiting for our amp, we weren't able to do output on the speaker we had but we did save the wav file for output and we were able to play it off of our computers. Further, we were able to achieve very accurate sound capture, translation, and output sound quality via piper. Through this, we believe we've gotten through most of the pipeline, but next steps are finishing the pipeline and the LEDs for the system that depend on other things.
+We were able to work through the major components of our project in the MVP DEMO with the components that we had access to. Given that we were still waiting for our amp, we weren't able to do output on the speaker we had but we did save the wav file for output and we were able to play it off of our computers. Further, we were able to achieve very accurate sound capture, translation, and output sound quality via piper. Through this, we believe we've gotten through most of the pipeline, but next steps are creating some type of enclosure for the system, adding the LEDs for low battary, active translation, and low confidence translation.
 
 ## Final Report
 
