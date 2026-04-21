@@ -184,7 +184,7 @@ FlashText lookup, and results from our preposition-sensitive clinical evaluation
   <a href="MVP_DEMO.MOV.mp4">▶ Watch MVP Demo (click to download/play)</a>
 </video>
 
-> **GitHub viewers:** click [▶ MVP\_DEMO.MOV.mp4](MVP_DEMO.MOV.mp4) to download and play the demo video.
+> **GitHub viewers:** click [▶ MVP\_DEMO.MOV.mp4](media/MVP_DEMO.MOV.mp4) to download and play the demo video.
 
 ### 2. Audio Samples
 
