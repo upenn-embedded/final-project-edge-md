@@ -10,6 +10,7 @@
  *   - On press  (falling edge): sends 0xFE 0xFE 0x53 ('S') via USART2
  *   - On release (rising edge): sends 0xFE 0xFE 0x45 ('E') via USART2
  *   - 20 ms software debounce on every edge
+ *   - Sends 0xAA at boot so you can verify TX is working before any button press
  *
  * Hardware connections (Nucleo-F411RE):
  *   PA2  — USART2 TX  →  RPi RX  (/dev/ttyAMA0)
@@ -21,114 +22,35 @@
 
 #include "main.h"
 
-/* ── Peripherals ──────────────────────────────────────────────────────────── */
 UART_HandleTypeDef huart2;
 
-/* ── Prototypes ───────────────────────────────────────────────────────────── */
 void SystemClock_Config(void);
 void Error_Handler(void);
-static void MX_GPIO_Init(void);
-static void MX_USART2_UART_Init(void);
 static void SendControlSeq(uint8_t cmd);
-
-/* ── Control byte escape sequence ────────────────────────────────────────── */
-/*
- * 0xFE 0xFE <cmd>  is unambiguous in the audio frame protocol:
- *   audio byte-0 has bit-7 SET  (0x80-0xFF)
- *   audio byte-1 has bit-7 CLEAR (0x00-0x7F)
- * Two consecutive 0xFE bytes cannot appear in a valid audio frame pair,
- * so the RPi decoder can safely distinguish control packets from PCM data.
- */
-#define CTRL_PREFIX_A  0xFE
-#define CTRL_PREFIX_B  0xFE
-#define CMD_START      0x53   /* 'S' */
-#define CMD_STOP       0x45   /* 'E' */
-
-/* ── LED blink helper ─────────────────────────────────────────────────────── */
-static inline void BlinkLED(void) {
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
-    HAL_Delay(30);
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
-}
 
 /* ── Main ─────────────────────────────────────────────────────────────────── */
 int main(void) {
     HAL_Init();
     SystemClock_Config();
-    MX_GPIO_Init();
-    MX_USART2_UART_Init();
 
-    /* Initial LED off */
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
-
-    GPIO_PinState prev = GPIO_PIN_SET;  /* released = high (active-low button) */
-
-    while (1) {
-        GPIO_PinState cur = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13);
-
-        if (cur != prev) {
-            HAL_Delay(20);  /* debounce window */
-            GPIO_PinState confirmed = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13);
-
-            if (confirmed == cur) {
-                if (cur == GPIO_PIN_RESET) {
-                    /* Falling edge: button pressed → START recording */
-                    SendControlSeq(CMD_START);
-                    BlinkLED();
-                } else {
-                    /* Rising edge: button released → STOP recording */
-                    SendControlSeq(CMD_STOP);
-                    BlinkLED();
-                }
-                prev = cur;
-            }
-        }
-
-        HAL_Delay(5);  /* polling interval */
-    }
-}
-
-/* ── Send 3-byte control sequence ────────────────────────────────────────── */
-static void SendControlSeq(uint8_t cmd) {
-    uint8_t buf[3] = { CTRL_PREFIX_A, CTRL_PREFIX_B, cmd };
-    HAL_UART_Transmit(&huart2, buf, 3, 100);
-}
-
-/* ── GPIO Init ───────────────────────────────────────────────────────────── */
-static void MX_GPIO_Init(void) {
+    /* LED */
     __HAL_RCC_GPIOA_CLK_ENABLE();
+    GPIO_InitTypeDef led = {0};
+    led.Pin   = GPIO_PIN_5;
+    led.Mode  = GPIO_MODE_OUTPUT_PP;
+    led.Pull  = GPIO_NOPULL;
+    led.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOA, &led);
+
+    /* Button — PC13, input with pull-up (active-low on Nucleo) */
     __HAL_RCC_GPIOC_CLK_ENABLE();
+    GPIO_InitTypeDef btn = {0};
+    btn.Pin  = GPIO_PIN_13;
+    btn.Mode = GPIO_MODE_INPUT;
+    btn.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(GPIOC, &btn);
 
-    GPIO_InitTypeDef g = {0};
-
-    /* PA5 — LED output */
-    g.Pin   = GPIO_PIN_5;
-    g.Mode  = GPIO_MODE_OUTPUT_PP;
-    g.Pull  = GPIO_NOPULL;
-    g.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(GPIOA, &g);
-
-    /* PC13 — USER button, input with pull-up (active-low on Nucleo) */
-    g.Pin  = GPIO_PIN_13;
-    g.Mode = GPIO_MODE_INPUT;
-    g.Pull = GPIO_PULLUP;
-    HAL_GPIO_Init(GPIOC, &g);
-}
-
-/* ── USART2 Init (921600 8N1, PA2 TX / PA3 RX) ───────────────────────────── */
-static void MX_USART2_UART_Init(void) {
-    __HAL_RCC_USART2_CLK_ENABLE();
-    __HAL_RCC_GPIOA_CLK_ENABLE();
-
-    /* Configure PA2 (TX) and PA3 (RX) as AF7 (USART2) */
-    GPIO_InitTypeDef g = {0};
-    g.Pin       = GPIO_PIN_2 | GPIO_PIN_3;
-    g.Mode      = GPIO_MODE_AF_PP;
-    g.Pull      = GPIO_NOPULL;
-    g.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
-    g.Alternate = GPIO_AF7_USART2;
-    HAL_GPIO_Init(GPIOA, &g);
-
+    /* USART2 — 921600 8N1 */
     huart2.Instance          = USART2;
     huart2.Init.BaudRate     = 921600;
     huart2.Init.WordLength   = UART_WORDLENGTH_8B;
@@ -138,9 +60,50 @@ static void MX_USART2_UART_Init(void) {
     huart2.Init.HwFlowCtl    = UART_HWCONTROL_NONE;
     huart2.Init.OverSampling = UART_OVERSAMPLING_16;
     if (HAL_UART_Init(&huart2) != HAL_OK) Error_Handler();
+
+    /* Boot marker — lets you verify TX works before touching the button.
+       Run:  cat /dev/ttyAMA0 | xxd   and look for "aa" on startup. */
+    uint8_t boot_marker = 0xAA;
+    HAL_UART_Transmit(&huart2, &boot_marker, 1, 100);
+
+    GPIO_PinState prev = GPIO_PIN_SET;  /* released = high (active-low) */
+
+    while (1) {
+        GPIO_PinState cur = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13);
+
+        if (cur != prev) {
+            HAL_Delay(20);  /* debounce */
+            GPIO_PinState confirmed = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13);
+
+            if (confirmed == cur) {
+                if (cur == GPIO_PIN_RESET) {
+                    /* Falling edge: button pressed → START */
+                    SendControlSeq('S');
+                    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
+                    HAL_Delay(50);
+                    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
+                } else {
+                    /* Rising edge: button released → STOP */
+                    SendControlSeq('E');
+                    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
+                    HAL_Delay(50);
+                    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
+                }
+                prev = cur;
+            }
+        }
+
+        HAL_Delay(5);
+    }
 }
 
-/* ── Clock Config (same HSI/PLL as EdgMD main.c → 84 MHz SYSCLK) ─────────── */
+/* ── Send 3-byte control escape sequence ─────────────────────────────────── */
+static void SendControlSeq(uint8_t cmd) {
+    uint8_t buf[3] = { 0xFE, 0xFE, cmd };
+    HAL_UART_Transmit(&huart2, buf, 3, 100);
+}
+
+/* ── Clock Config (84 MHz SYSCLK from HSI, APB1 = 42 MHz for USART2) ─────── */
 void SystemClock_Config(void) {
     RCC_OscInitTypeDef osc = {0};
     RCC_ClkInitTypeDef clk = {0};
@@ -153,14 +116,10 @@ void SystemClock_Config(void) {
     osc.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
     osc.PLL.PLLState        = RCC_PLL_ON;
     osc.PLL.PLLSource       = RCC_PLLSOURCE_HSI;
-    osc.PLL.PLLM            = 16;
-    osc.PLL.PLLN            = 336;
-    osc.PLL.PLLP            = RCC_PLLP_DIV4;
-    osc.PLL.PLLQ            = 4;
+    osc.PLL.PLLM = 16; osc.PLL.PLLN = 336; osc.PLL.PLLP = RCC_PLLP_DIV4; osc.PLL.PLLQ = 4;
     if (HAL_RCC_OscConfig(&osc) != HAL_OK) Error_Handler();
 
-    clk.ClockType      = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK
-                       | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+    clk.ClockType      = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
     clk.SYSCLKSource   = RCC_SYSCLKSOURCE_PLLCLK;
     clk.AHBCLKDivider  = RCC_SYSCLK_DIV1;
     clk.APB1CLKDivider = RCC_HCLK_DIV2;
