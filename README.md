@@ -145,10 +145,10 @@ We're now moving towards creating a consistent stream of data from the microphon
 
 ## Sprint Review #2
 
-![alt text](media/IMG_1733.jpg)
 ![alt text](media/IMG_3500.png)
 
 ### Last week's progress
+
 We selected LLaMA 3.2 3B as our core translation model, which sits between the Whisper STT and Piper TTS stages in the pipeline. This model was chosen to balance clinical translation accuracy against the memory and compute constraints of the Raspberry Pi 5, where it will run inference via llama.cpp with Q4_K_M quantization. We began preparing the fine-tuning workflow using Unsloth and TRL's SFTTrainer with LoRA adapters.
 On the data side, we identified and sourced several datasets to support our staged training approach:
 
@@ -169,15 +169,44 @@ Our focus is on closing the loop from audio input to translated output on real h
 * Get UART communication fully stable and reliable end-to-end between the STM32 and Pi, with consistent framing and error handling.
 * Integrate the display so that both the original Spanish transcription and the English translation render on screen simultaneously.
 * Validate that Whisper.cpp is transcribing Spanish audio accurately and that Piper is producing clean, intelligible English speech output
-* Run an initial quantitative evaluation of the translation model — SacreBLEU scores against our test set, accuracy checks against the medical glossary via 
+* Run an initial quantitative evaluation of the translation model — SacreBLEU scores against our test set, accuracy checks against the medical glossary via
 FlashText lookup, and results from our preposition-sensitive clinical evaluation set to identify where the model is weakest
 * Use those evaluation results to prioritize the next round of fine-tuning adjustments
 
-
-
-
-
 ## MVP Demo
+
+### 1. Video
+
+<!-- GitHub's markdown renderer does not support <video> tags. If viewing on GitHub, click the link below. -->
+<!-- In Cursor / VS Code markdown preview the player below will work directly. -->
+
+<video src="MVP_DEMO.MOV.mp4" controls width="720">
+  <a href="MVP_DEMO.MOV.mp4">▶ Watch MVP Demo (click to download/play)</a>
+</video>
+
+> **GitHub viewers:** click [▶ MVP\_DEMO.MOV.mp4](MVP_DEMO.MOV.mp4) to download and play the demo video.
+
+### 2. Audio Samples
+
+The clips below demonstrate the end-to-end audio pipeline — raw microphone capture fed into the translation system and the Piper TTS output.
+
+**Input — raw microphone recording:**
+
+<audio src="wav%20files/recording.wav" controls>
+  <a href="wav%20files/recording.wav">recording.wav</a>
+</audio>
+
+**Output — Piper TTS translated speech:**
+
+<audio src="wav%20files/piper.wav" controls>
+  <a href="wav%20files/piper.wav">piper.wav</a>
+</audio>
+
+### 3. Images
+
+### 4. Results
+
+We were able to work through the major components of our project in the MVP DEMO with the components that we had access to. Given that we were still waiting for our amp, we weren't able to do output on the speaker we had but we did save the wav file for output and we were able to play it off of our computers. Further, we were able to achieve very accurate sound capture, translation, and output sound quality via piper. Through this, we believe we've gotten through most of the pipeline, but next steps are finishing the pipeline and the LEDs for the system that depend on other things.
 
 ## Final Report
 
@@ -186,13 +215,9 @@ If you’ve never made a GitHub pages website before, you can follow this webpag
 
 ### 1. Video
 
-<video src="MVP_DEMO.MOV.mp4" controls></video>
-
 ### 2. Images
 
-### 3. Results 
-
-We were able to work through the major components of our project in the MVP DEMO with the components that we had access to. Given that we were still waiting for our amp, we weren't able to do output on the speaker we had but we did save the wav file for output and we were able to play it off of our computers. Further, we were able to achieve very accurate sound capture, translation, and output sound quality via piper. Through this, we believe we've gotten through most of the pipeline, but next steps are finishing the pipeline and the LEDs for the system that depend on other things. 
+### 3. Results
 
 #### 3.1 Software Requirements Specification (SRS) Results
 
@@ -232,6 +257,6 @@ On the Raspberry Pi side, a Python script listens on `/dev/ttyAMA10`, reconstruc
 
 ### 5. Conclusion
 
-We are very close to completing this project, just waiting on the amp and need to finish the last of LED connections. 
+We are very close to completing this project, just waiting on the amp and need to finish the last of LED connections.
 
 ## References
