@@ -186,9 +186,13 @@ If you’ve never made a GitHub pages website before, you can follow this webpag
 
 ### 1. Video
 
+<video src="MVP_DEMO.MOV.mp4" controls></video>
+
 ### 2. Images
 
-### 3. Results
+### 3. Results 
+
+We were able to work through the major components of our project in the MVP DEMO with the components that we had access to. Given that we were still waiting for our amp, we weren't able to do output on the speaker we had but we did save the wav file for output and we were able to play it off of our computers. Further, we were able to achieve very accurate sound capture, translation, and output sound quality via piper. Through this, we believe we've gotten through most of the pipeline, but next steps are finishing the pipeline and the LEDs for the system that depend on other things. 
 
 #### 3.1 Software Requirements Specification (SRS) Results
 
@@ -227,5 +231,7 @@ On the Raspberry Pi side, a Python script listens on `/dev/ttyAMA10`, reconstruc
 | — | PA9 (USART1 TX, CN10 Pin 1) | Pin 10 (GPIO15 RXD) |
 
 ### 5. Conclusion
+
+We are very close to completing this project, just waiting on the amp and need to finish the last of LED connections. 
 
 ## References

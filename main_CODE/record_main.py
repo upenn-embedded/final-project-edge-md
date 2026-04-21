@@ -57,14 +57,6 @@ def decode_samples(raw_bytes):
     return samples
 
 
-def encode_sample(val16):
-    """Encode 16-bit signed PCM into 2-byte frame for STM32."""
-    val12 = ((val16 >> 4) + 2048) & 0xFFF
-    b0 = 0x80 | (val12 >> 6)
-    b1 = val12 & 0x3F
-    return bytes([b0, b1])
-
-
 def record(ser, duration_seconds):
     """Record audio from STM32 mic over UART."""
     total_samples = SAMPLE_RATE * duration_seconds
@@ -90,43 +82,6 @@ def record(ser, duration_seconds):
 
     print(f"  [REC] Saved {OUTPUT_FILE} ({len(samples)/SAMPLE_RATE:.1f}s)")
     return True
-
-
-def playback(ser):
-    """Play back WAV file through STM32 I2S speaker over UART."""
-    if not os.path.exists(OUTPUT_FILE):
-        print("  [PLAY] No file to play")
-        return
-
-    wf = wave.open(OUTPUT_FILE, 'r')
-    channels    = wf.getnchannels()
-    total       = wf.getnframes()
-    rate        = wf.getframerate()
-
-    print(f"  [PLAY] Playing {OUTPUT_FILE} ({total/rate:.1f}s)...")
-
-    CHUNK = 256
-    sent  = 0
-
-    while True:
-        frames = wf.readframes(CHUNK)
-        if not frames:
-            break
-
-        num = len(frames) // 2
-        samples = struct.unpack(f'<{num}h', frames)
-
-        # Mix stereo to mono if needed
-        if channels == 2:
-            samples = [(samples[i] + samples[i+1]) // 2
-                       for i in range(0, len(samples), 2)]
-
-        packet = b''.join(encode_sample(s) for s in samples)
-        ser.write(packet)
-        sent += len(samples)
-
-    wf.close()
-    print(f"  [PLAY] Done. Sent {sent} samples.")
 
 
 def main():
@@ -169,10 +124,10 @@ def main():
                 time.sleep(0.2)
 
                 # ── Playback ──────────────────────────────────
-                playback(ser)
+                #playback(ser)
 
                 # Small gap before next record
-                time.sleep(0.5)
+                time.sleep(2)
 
             if not LOOP_FOREVER:
                 break

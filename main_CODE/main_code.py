@@ -175,8 +175,8 @@ def synthesize_and_play(ser, spanish_text, wav_path):
     print("\n[4/4] SPEAKING Spanish...")
 
     # Synthesize with Piper
-    result = subprocess.run(
-        [PIPER_BIN, '--model', PIPER_MODEL, '--output_file', wav_path],
+    result = subprocess.run([
+        PIPER_BIN, '--model', PIPER_MODEL, '--output_file', wav_path],
         input=spanish_text.encode('utf-8'),
         capture_output=True,
     )
@@ -195,8 +195,12 @@ def synthesize_and_play(ser, spanish_text, wav_path):
     if channels == 2:
         pairs = struct.unpack(f'<{n_frames*2}h', raw)
         samples = [(pairs[i] + pairs[i+1]) // 2 for i in range(0, len(pairs), 2)]
+        # Note we use pairs here to so that we can seperate the data we send to each side of the speaker.
     else:
-        samples = list(struct.unpack(f'<{n_frames}h', raw))
+        samples = list(struct.unpack(f'<{n_frames}h', raw)) 
+        # Convert to a list so that we can easily iterate through it and 
+        # send it to the speaker. We also need to convert it to a list because the struct.unpack returns a tuple, 
+        # and tuples are immutable, so we can't modify them directly. By converting it to a list, we can easily modify the samples if needed before sending them to the speaker.
 
     # Stream to STM32
     print(f"  Sending {len(samples)} samples to STM32...")
@@ -205,7 +209,7 @@ def synthesize_and_play(ser, spanish_text, wav_path):
     sent = 0
 
     for i in range(0, len(samples), CHUNK):
-        chunk = samples[i:i + CHUNK]
+        chunk = samples[i: i + CHUNK]
         packet = b''.join(encode_sample(s) for s in chunk)
         ser.write(packet)
         sent += len(chunk)
