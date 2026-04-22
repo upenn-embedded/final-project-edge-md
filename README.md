@@ -332,24 +332,31 @@ for i in range(0, len(samples), CHUNK):
 
 #### Have you achieved some or all of your Software Requirements Specification (SRS)? Show how you collected data and the outcomes.
 
-* [X] SRS-01: Convert spoken English or Spanish input into text with at least 90% accuracy under low-noise conditions, measured against ground-truth transcriptions.
-  * Need to work on the spanish input.
-* [ ] SRS-02:Translate text between English and Spanish with at least 85% semantic accuracy on a predefined set of medical phrases and sentences.
-* [ ] SRS-03: Translate text between English and Spanish with at least 85% semantic accuracy on a predefined set of medical phrases and sentences.
-* [ ] SRS-04: Produce translated audio output within 15 seconds of input completion, measured end-to-end from speech input to playback.
-  * Currently sitting around 40 seconds, with the "crude" version of our pipeline which is just playing the literal .wav files via our computers. Once the amp is configred and tthe Speaker is working this could be much faser.
-* [ ] SRS-05: Support basic conversational exchanges by preserving meaning across at least two consecutive sentences.
-  * Not completed.
-* [ ] SRS-06: Detect low-confidence or failed translations and trigger an error state or retry in at least 90% of such cases.
-  * Not completed.
+* [X] SRS-01: Convert spoken English or Spanish analog input into text with at least 90% accuracy under low-noise conditions, measured against ground-truth transcriptions.
+  * As shown in the video, our initial test with our Analog Speaker and Whisper.cpp software resulted in 100% accuracy with a 2 sentence input. This means that we're able to succesfully capture analog data, take out noise and then convert it into digital data to be put into text. 
+* [X] SRS-02:Translate text between English and Spanish with at least 85% semantic accuracy on a predefined set of medical phrases and sentences. 
+  * We used BLEU to compare our translations to the actual expected translation to see if the meaning of the 2 sentences were similar. We saw that the BLEU scores tended to be very high, well above our baseline of 85%. During our demo, we also asked Andrea, our local spanish TA if our output was similar to our english input and we got the thumbs up from her. 
+* [ ] SRS-03: Apply a medical dictionary so critical medical terms are translated correctly in at least 95% of test cases. 
+ * Not completed yet. We did lots of finetuning with a medical dictionary but we saw that we overtrained that model and that rather we need to figure out a way to upload the dictionary and just be able to choose words from the dictionary which was part of our original plan but now we are just limiting our pipeline to just be the base model and the dictionary. 
+* [ ] SRS-04: Produce translated audio output within 30 seconds of input completion, measured end-to-end from speech input to playback.
+  * Currently sitting around 40 seconds, with the "crude" version of our pipeline which is just playing the literal .wav files via our computers. Once the amp is configred and tthe Speaker is working this could be much faster. This we will say isn't completed yet. 
+* [X] SRS-05: Support basic conversational exchanges by preserving meaning across at least two consecutive sentences(around 10 seconds of speaking). 
+  * This is completed as shown we can collect sentences for 10 seconds and we are able to provide accurate feedback. 
+* [ ] SRS-06: Save wav file data on local raspberry pi and then send back to be played over STM32 Speaker.  
+  *  We are able to find the wav file in the rPi put it in a pen drive and then play it. We are however unable to actuall play the wav file through the STM32 so this is still not completed. 
 
 #### Have you achieved some or all of your Hardware Requirements Specification (HRS)? Show how you collected data and the outcomes.
 
-* [ ] HRS-01: LEDs shall indicate system state, including power, active listening, processing, and error conditions (e.g., failed or low-confidence translations).
-* [ ] HRS-02: The audio input path shall capture clear speech in environments with minimal background noise (microphone and conditioning suitable for clinical-style use).
-* [ ] HRS-03: The system shall support real-time or near-real-time operation so speech is translated and played back with minimal delay.
-* [ ] HRS-04: Tactile push buttons shall provide user control aligned with the pipeline (e.g., initiating recording and other modes) via GPIO to the STM32.
-* [ ] HRS-05: The audio output path shall drive a speaker from the processed translation (e.g., I2S amplifier and speaker) for intelligible playback.
+* [ ] HRS-01: LEDs shall indicate system state, including power, active listening, processing, and error conditions (e.g., failed or low-confidence translations). 
+    * Not Completed
+* [X] HRS-02: The audio input path shall capture clear speech in environments with minimal background noise (microphone and conditioning suitable for clinical-style use). 
+    * Done 
+* [X] HRS-03: The system shall support real-time or near-real-time operation so speech is translated and played back with minimal delay. 
+    * Done 
+* [ ] HRS-04: Tactile push buttons shall provide user control aligned with the pipeline (e.g., initiating recording and other modes) via GPIO to the STM32. 
+    * Not Completed 
+* [ ] HRS-05: The audio output path shall drive a speaker from the processed translation (e.g., I2S amplifier and speaker) for intelligible playback. 
+    * Not Completed
 
 ---
 
@@ -357,16 +364,20 @@ for i in range(0, len(samples), CHUNK):
 
 > *[Fill in here — describe what still needs to be completed before the final demo: mechanical enclosure, LED state indicators (power, active listening, processing, low-confidence error), battery integration, and any GUI or display output planned for the device.]*
 
+The main things we have left are our case, which we have finished designing but are now sending to 3D print. Our LED configuration to connect with power, accuracy checker, and recording. Finally we just need to make sure that this can run autonomously with a click of a button. We have been doing everything through a computer to design and run everything but haven't run anything through just the button itself. 
 ---
 
 ### 8. Riskiest Remaining Element
 
-> *[Fill in here — identify the single highest-risk item left (e.g., end-to-end latency under the 15-second SRS-04 requirement with the amp and speaker in the loop, LED error-state reliability, or enclosure fit).]*
+> *[Fill in here — identify the single highest-risk item left (e.g., end-to-end latency under the 15-second SRS-04 requirement with the amp and speaker in the loop, LED error-state reliability, or enclosure fit).]* 
+
+The highest risk item is actually the output and the autonomous feature of the project. We need to be able to have an output that we can here and we need to be able to start the project immedietly with a click of a button. What this means for us is that we work on writing a system that is able to send data to the RPi and have RPi constantly check for that button being pressed and on click receive data from the STM32 that's constantly sending data to the RPI but this time will not send garbage and will instead send good data. 
 
 ### 9. De-risking Plan
 
 > *[Fill in here — describe your plan to address the risk above: timeline, fallback options, and who owns each item.]*
-
+ 
+Our system to derisk is that we have USB speakers so that in the worst case we have USB speakers that play output. For the autonomous system, in the worst case, we have a computer that would be able to play our wav file to show that most of the system works. This is currently what we have but this isn't at all what we want, we need top be able to have all of the components working together and be able to fit inside the box. 
 ---
 
 ## Final Report
