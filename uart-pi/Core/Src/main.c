@@ -114,6 +114,8 @@ static void I2S3_Init_Bare(void) {
 
     /* PC10 = I2S3_CK, PC12 = I2S3_SD (AF6) */
     GPIO_InitStruct.Pin       = GPIO_PIN_10 | GPIO_PIN_12;
+    GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Alternate = GPIO_AF6_SPI3;
     HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
     /* Configure PLLI2S: HSI 16MHz / M=16 * N=192 / R=2 = 96 MHz */
@@ -244,7 +246,10 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
 static inline int ring_pop_sample(int16_t *out) {
     uint32_t head  = (RX_RING_SIZE - DMA2_Stream5->NDTR) & RX_RING_MASK;
     uint32_t avail = (head - rx_tail) & RX_RING_MASK;
-    if (avail < 2U) return 0;
+
+    /* Wait for a buffer of 512 bytes (16ms) before starting to play.
+       This prevents the "machine gun" underruns you see in your logs. */
+    if (avail < 512U) return 0;
 
     uint8_t lo = rx_ring[rx_tail];
     uint8_t hi = rx_ring[(rx_tail + 1U) & RX_RING_MASK];
