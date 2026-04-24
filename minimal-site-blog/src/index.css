@@ -1,0 +1,50 @@
+/* Limit class scanning to src/ so dev/build don’t walk the whole package root (lockfile, public assets, etc.). */
+@import "tailwindcss" source("../src");
+
+@theme {
+  --font-sans: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --font-display: Lato, "Source Sans 3", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@layer utilities {
+  .font-display {
+    font-family: Lato, "Source Sans 3", system-ui, sans-serif;
+  }
+
+  .mono {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Match page chrome so rubber-band / overscroll isn’t browser default white */
+html {
+  background-color: rgb(27 27 30);
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body,
+#root {
+  background-color: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -3,6 +3,7 @@ import wave
 import struct
 import sys
 import time
+from pathlib import Path
 
 # Must match STM32 UART config. 460800 gives 46080 bytes/sec,
 # enough headroom for 16kHz 16-bit PCM (32000 bytes/sec).
@@ -54,5 +55,6 @@ def send_wav(filename):
     print(f"Sent {sent} bytes in {time.time()-t0:.2f}s")
 
 if __name__ == '__main__':
-    fname = sys.argv[1] if len(sys.argv) > 1 else 'recording_000.wav'
+    default_wav = Path(__file__).resolve().parents[2] / "samples" / "recording_000.wav"
+    fname = sys.argv[1] if len(sys.argv) > 1 else str(default_wav)
     send_wav(fname)

@@ -1,19 +1,15 @@
 #!/usr/bin/env python3
 """
 Quick test: run whisper.cpp on a WAV file and save transcription to .txt
-Usage: python3 test_whisper.py recording_000.wav
+Usage: python3 test_whisper.py samples/recording_000.wav
 """
 import subprocess
 import sys
 import os
+from pathlib import Path
 
-<<<<<<< HEAD
 WHISPER_BIN   = os.path.expanduser('~/whisper.cpp/build/bin/whisper-cli')
 WHISPER_MODEL = os.path.expanduser('~/whisper.cpp/models/ggml-small.en.bin')
-=======
-WHISPER_BIN   = os.path.expanduser('../whisper.cpp/build/bin/whisper-cli')
-WHISPER_MODEL = os.path.expanduser('../whisper.cpp/models/ggml-small.en.bin')
->>>>>>> 878cc8a (play and record wav)
 
 def transcribe(wav_path: str) -> str:
     wav_path = os.path.abspath(wav_path)
@@ -21,15 +17,10 @@ def transcribe(wav_path: str) -> str:
         raise FileNotFoundError(f"WAV file not found: {wav_path}")
 
     # Output file prefix: same name as WAV, no extension
-<<<<<<< HEAD
     out_prefix = os.path.splitext(wav_path)[0] + '_transcription'
 
-    result = subprocess.run([ # Here we are swithcing to use the whisper command line. Note this is because Whisper.cpp is a C++ file
-=======
-    out_prefix = os.path.splitext(wav_path)[0]
-
     result = subprocess.run([
->>>>>>> 878cc8a (play and record wav)
+        # Using the whisper.cpp CLI because whisper.cpp is native C++.
         WHISPER_BIN,
         '-m', WHISPER_MODEL,
         '-f', wav_path,
@@ -51,11 +42,8 @@ def transcribe(wav_path: str) -> str:
 
 
 if __name__ == '__main__':
-<<<<<<< HEAD
-    wav = sys.argv[1] if len(sys.argv) > 1 else 'recording_000.wav'
-=======
-    wav = sys.argv[1] if len(sys.argv) > 1 else 'recording.wav'
->>>>>>> 878cc8a (play and record wav)
+    default_wav = Path(__file__).resolve().parents[2] / "samples" / "recording_000.wav"
+    wav = sys.argv[1] if len(sys.argv) > 1 else str(default_wav)
     print(f"Transcribing: {wav}")
     text, txt_path = transcribe(wav)
     print(f"\nTranscription:\n{text}")

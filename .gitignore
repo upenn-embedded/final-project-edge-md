@@ -20,3 +20,12 @@
 
 #User Specific Files
 *.atsuo
+
+# macOS
+.DS_Store
+
+# Python cache/env
+__pycache__/
+*.pyc
+**/.venv/
+**/venv/
