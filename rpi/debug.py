@@ -2,32 +2,43 @@ import spidev
 import wave
 import sys
 import time
+import struct
 
 spi = spidev.SpiDev()
 spi.open(0, 0)
 spi.max_speed_hz = 500000
-spi.mode = 0  # back to mode 0
-spi.bits_per_word = 8  # 8-bit transfers, no swapping
+spi.mode = 0
 
 SAMPLE_RATE = 16000
 
 def stream_wav(filename):
     wf = wave.open(filename, 'rb')
-    framerate = wf.getframerate()
     n_frames  = wf.getnframes()
-    print(f'Playing: {filename} {framerate}Hz {n_frames/framerate:.2f}s')
+    framerate = wf.getframerate()
+    print(f'Playing: {filename} {n_frames/framerate:.2f}s')
 
     start = time.time()
     samples_sent = 0
 
     while True:
-        # read raw PCM bytes directly, no processing
         raw = wf.readframes(256)
         if not raw:
             break
 
-        # send raw bytes as-is, no byte swapping
-        spi.writebytes2(raw)
+        # build raw I2S frames: each mono sample → stereo frame
+        # [LEFT_HI, LEFT_LO, RIGHT_HI, RIGHT_LO]
+        i2s_frames = []
+        for i in range(0, len(raw), 2):
+            lo = raw[i]
+            hi = raw[i+1]
+            # left channel MSB first
+            i2s_frames.append(hi)
+            i2s_frames.append(lo)
+            # right channel same sample
+            i2s_frames.append(hi)
+            i2s_frames.append(lo)
+
+        spi.writebytes2(bytes(i2s_frames))
 
         samples_sent += len(raw) // 2
         elapsed = time.time() - start
