@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 import serial, wave, struct, sys
+from pathlib import Path
 
 PORT = "/dev/ttyAMA0"
 BAUD = 921600
-FILE = sys.argv[1] if len(sys.argv) > 1 else "recording.wav"
+DEFAULT_FILE = Path(__file__).resolve().parents[2] / "samples" / "recording.wav"
+FILE = sys.argv[1] if len(sys.argv) > 1 else str(DEFAULT_FILE)
 GAIN = 8    # ← increase this if still too quiet (try 8, 12, 16)
 
 def encode(val16, gain=GAIN):

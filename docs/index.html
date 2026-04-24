@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EDGE MD | Medical Translation on the Edge</title>
+    <meta
+      name="description"
+      content="EDGE MD builds a portable English-Spanish medical translator for care settings that lack immediate language support."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./site.css" />
+  </head>
+  <body>
+    <div class="site-root" data-theme="dark" id="siteRoot">
+      <aside class="sidebar">
+        <div>
+          <h1>EDGE MD</h1>
+          <p class="muted">Portable Medical Translation</p>
+          <p class="muted mono">ESE 350 · UPenn</p>
+        </div>
+        <nav>
+          <a href="#story">Story</a>
+          <a href="#system">System</a>
+          <a href="#progress">Progress</a>
+          <a href="#evidence">Evidence</a>
+          <a href="#resources">Resources</a>
+          <a href="#team">Team</a>
+        </nav>
+        <button id="themeToggle" class="btn" type="button">Toggle Theme</button>
+      </aside>
+
+      <main class="content">
+        <section id="story" class="panel hero">
+          <figure class="hero-image">
+            <img src="../media/dammi-justin-working.JPG" alt="Dammi and Justin working on EDGE MD integration" />
+            <figcaption>Active EDGE MD integration session.</figcaption>
+          </figure>
+          <p class="eyebrow">Final Project Website</p>
+          <h2>Medical translation where it is needed most.</h2>
+          <p>
+            EDGE MD is designed for clinics and field settings where doctor-patient communication can break down due to language
+            barriers. The goal is a portable English-Spanish translator that runs on an embedded edge pipeline.
+          </p>
+          <div class="split">
+            <div>
+              <h3>Why this matters</h3>
+              <p>
+                From our README motivation: when providers and patients do not share a language, care quality and speed can drop.
+                Relying on ad-hoc interpreters is not always safe or practical in urgent environments.
+              </p>
+            </div>
+            <div>
+              <h3>Project at a glance</h3>
+              <div class="stats">
+                <div class="stat">
+                  <span class="stat-value">STM32 + Raspberry Pi</span>
+                  <span class="stat-label">Hybrid edge architecture</span>
+                </div>
+                <div class="stat">
+                  <span class="stat-value">4 Stages</span>
+                  <span class="stat-label">Record -> STT -> Translate -> TTS</span>
+                </div>
+                <div class="stat">
+                  <span class="stat-value">UART Link</span>
+                  <span class="stat-label">Realtime board-to-board audio transport</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <a class="cta" href="https://github.com/upenn-embedded/final-project-edge-md" target="_blank" rel="noreferrer">
+            View source on GitHub
+          </a>
+        </section>
+
+        <section id="system" class="panel">
+          <h2>Architecture</h2>
+          <p class="mono">STM32 Audio Front-End -> UART -> RPi Inference Pipeline -> UART -> STM32 Speaker Output</p>
+          <ul>
+            <li><strong>Firmware:</strong> low-level audio capture/playback and board control.</li>
+            <li><strong>Pi Pipeline:</strong> Whisper STT, Llama translation, Piper TTS orchestration.</li>
+            <li><strong>Validation:</strong> sprint-based testing against SRS/HRS goals.</li>
+          </ul>
+          <div class="flow-grid">
+            <div class="flow-step"><span>1</span><p>Capture audio on STM32</p></div>
+            <div class="flow-step"><span>2</span><p>Transmit over UART</p></div>
+            <div class="flow-step"><span>3</span><p>Whisper + Llama + Piper on RPi</p></div>
+            <div class="flow-step"><span>4</span><p>Play translated output via STM32</p></div>
+          </div>
+        </section>
+
+        <section id="progress" class="panel">
+          <h2>Timeline and Progress</h2>
+          <p class="muted">From initial proposal through final report delivery.</p>
+          <ol class="project-timeline">
+            <li>
+              <div class="tl-point" aria-hidden="true"></div>
+              <div class="tl-body">
+                <p class="tl-phase">Phase 1 · Proposal</p>
+                <h3>Problem Definition and Scope</h3>
+                <p>Defined the clinical communication gap and mapped SRS/HRS requirements.</p>
+              </div>
+            </li>
+            <li>
+              <div class="tl-point" aria-hidden="true"></div>
+              <div class="tl-body">
+                <p class="tl-phase">Phase 2 · Sprint #1</p>
+                <h3>Baseline Platform Setup</h3>
+                <p>Set up environment, assembled components, and ran first communication checks.</p>
+              </div>
+            </li>
+            <li>
+              <div class="tl-point" aria-hidden="true"></div>
+              <div class="tl-body">
+                <p class="tl-phase">Phase 3 · Sprint #2</p>
+                <h3>Pipeline Integration</h3>
+                <p>Integrated audio I/O and inference flow, then stabilized around UART transport.</p>
+              </div>
+            </li>
+            <li>
+              <div class="tl-point" aria-hidden="true"></div>
+              <div class="tl-body">
+                <p class="tl-phase">Phase 4 · MVP Demo</p>
+                <h3>Working End-to-End Demo</h3>
+                <p>Demonstrated full capture -> translation -> synthesized output with hardware in loop.</p>
+              </div>
+            </li>
+            <li>
+              <div class="tl-point" aria-hidden="true"></div>
+              <div class="tl-body">
+                <p class="tl-phase">Phase 5 · Validation</p>
+                <h3>SRS/HRS Tracking</h3>
+                <p>Logged completed goals and remaining risk areas for final delivery.</p>
+              </div>
+            </li>
+            <li>
+              <div class="tl-point" aria-hidden="true"></div>
+              <div class="tl-body">
+                <p class="tl-phase">Phase 6 · Final Report</p>
+                <h3>Documentation and Packaging</h3>
+                <p>Consolidated report, media, and repository organization for submission.</p>
+              </div>
+            </li>
+          </ol>
+          <div class="req-grid">
+            <div class="req-card"><h3>SRS Complete</h3><p>SRS-01, SRS-02, SRS-05</p></div>
+            <div class="req-card"><h3>SRS In Progress</h3><p>SRS-03, SRS-04, SRS-06</p></div>
+            <div class="req-card"><h3>HRS Complete</h3><p>HRS-02, HRS-03</p></div>
+            <div class="req-card"><h3>HRS In Progress</h3><p>HRS-01, HRS-04, HRS-05</p></div>
+          </div>
+        </section>
+
+        <section id="evidence" class="panel">
+          <h2>Build Evidence</h2>
+          <p class="muted">Ordered to match the project story from concept through final packaging.</p>
+
+          <div class="evidence-block">
+            <h3>1) Concept and System Planning</h3>
+            <div class="gallery">
+              <figure>
+                <img src="../media/firstSketch.png" alt="EDGE MD design sketch" />
+                <figcaption>Early design sketch that framed the form factor and interaction model.</figcaption>
+              </figure>
+              <figure>
+                <img src="../media/blockDiagram.png" alt="EDGE MD system block diagram" />
+                <figcaption>System block diagram mapping firmware, Pi pipeline, and communication links.</figcaption>
+              </figure>
+            </div>
+          </div>
+
+          <div class="evidence-block">
+            <h3>2) Bench Integration and Team Build Work</h3>
+            <div class="gallery">
+              <figure>
+                <img src="../media/dammi-working.jpg" alt="Hardware bring-up in progress" />
+                <figcaption>Early firmware and hardware bring-up session.</figcaption>
+              </figure>
+              <figure>
+                <img src="../media/dammi-justin-working.JPG" alt="Team members working on integration" />
+                <figcaption>Active team integration and bench testing.</figcaption>
+              </figure>
+              <figure>
+                <img src="../media/stm32-rpi-side%20by%20side.JPG" alt="STM32 and Raspberry Pi setup side by side" />
+                <figcaption>STM32 and Raspberry Pi side-by-side integration setup.</figcaption>
+              </figure>
+            </div>
+          </div>
+
+          <div class="evidence-block">
+            <h3>3) Debugging and Pipeline Verification</h3>
+            <div class="gallery">
+              <figure>
+                <img src="../media/IMG_3557.JPG" alt="Logic analyzer and data inspection setup" />
+                <figcaption>Logic analyzer captures used to validate signal and transport behavior.</figcaption>
+              </figure>
+              <figure>
+                <img src="../media/edge-ai-code.png" alt="Edge AI code and pipeline development" />
+                <figcaption>Edge-side AI pipeline implementation and verification work.</figcaption>
+              </figure>
+              <figure>
+                <img src="../media/IMG_1792.jpg" alt="EDGE MD hardware MVP setup" />
+                <figcaption>MVP setup used for end-to-end testing.</figcaption>
+              </figure>
+            </div>
+          </div>
+
+          <div class="evidence-block">
+            <h3>4) Final Packaging and Indicators</h3>
+            <div class="gallery">
+              <figure>
+                <img src="../media/led-indicator-closeup.JPG" alt="LED indicator closeup on hardware" />
+                <figcaption>LED indicator close-up for system state signaling.</figcaption>
+              </figure>
+              <figure>
+                <img src="../media/edgemd-3d-print.jpeg" alt="3D printed enclosure for EDGE MD" />
+                <figcaption>3D-printed enclosure progress toward final packaging.</figcaption>
+              </figure>
+            </div>
+          </div>
+        </section>
+
+        <section id="resources" class="panel">
+          <h2>Resources</h2>
+          <div class="split">
+            <div>
+              <h3>Demo and documentation</h3>
+              <div class="links-list">
+                <a href="https://docs.google.com/videos/d/17sOfWx8P6tt43unIRTZpr-duvIzOP1j-f8Yf377OOpQ/edit?usp=sharing" target="_blank" rel="noreferrer">
+                  MVP video walkthrough
+                </a>
+                <a href="https://drive.google.com/file/d/18vrqvzDlqOkMEG6KEYrlbQ28RQISYc8a/view?usp=sharing" target="_blank" rel="noreferrer">
+                  Audio translation output clip
+                </a>
+                <a href="./README.pdf" target="_blank" rel="noreferrer">Final report (PDF)</a>
+                <a href="./Bare-Metal%20Embedded%20C%20Programming.pdf" target="_blank" rel="noreferrer">Bare-metal notes (PDF)</a>
+              </div>
+            </div>
+            <div>
+              <h3>Repository and build assets</h3>
+              <ul>
+                <li><code>uart-pi/</code>, <code>dami-testing/</code>, <code>justin-testing/</code> for firmware.</li>
+                <li><code>rpi/pipeline/</code>, <code>rpi/gui/</code>, <code>rpi/passback/</code> for Pi-side software.</li>
+                <li><code>ml_testing/</code>, <code>samples/</code>, and <code>sandbox/</code> for experiments and artifacts.</li>
+              </ul>
+              <p class="muted">Core BOM: INMP441 mic, MAX98357A amp, 3W 4Ω speaker.</p>
+              <div class="links-list">
+                <a href="../README.md" target="_blank" rel="noreferrer">Open full project README</a>
+                <a href="https://github.com/upenn-embedded/final-project-edge-md" target="_blank" rel="noreferrer">Open repository</a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="team" class="panel">
+          <h2>Team</h2>
+          <ul>
+            <li>Justin Monchais</li>
+            <li>Damodar Pai</li>
+            <li>Tyrone Marhguy</li>
+          </ul>
+          <p class="muted">Built at the University of Pennsylvania for ESE 350.</p>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      (function () {
+        const key = "edge-md-theme";
+        const root = document.getElementById("siteRoot");
+        const button = document.getElementById("themeToggle");
+        const initial = localStorage.getItem(key) || "dark";
+        root.setAttribute("data-theme", initial);
+        document.documentElement.style.colorScheme = initial;
+        button.addEventListener("click", function () {
+          const next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+          root.setAttribute("data-theme", next);
+          document.documentElement.style.colorScheme = next;
+          localStorage.setItem(key, next);
+        });
+      })();
+    </script>
+  </body>
+</html>

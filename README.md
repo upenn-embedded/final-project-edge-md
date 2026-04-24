@@ -22,6 +22,16 @@
 
 **GitHub Pages Website URL:** [for final submission]*
 
+## Repository Layout (Current)
+
+- `uart-pi/`: primary STM32CubeIDE firmware project (kept intact).
+- `dami-testing/`, `justin-testing/`: additional STM32 firmware workspaces.
+- `rpi/pipeline/`, `rpi/gui/`, `rpi/passback/`, `rpi/scripts/`: Raspberry Pi pipeline and utilities.
+- `ml_testing/`: ML experiments and model evaluation artifacts.
+- `samples/`: captured/generated WAV test assets.
+- `sandbox/`: standalone test artifacts and scratch files.
+- `docs/`: reference PDFs and documentation files.
+
 ## Final Project Proposal
 
 ### 1. Abstract
@@ -247,7 +257,7 @@ If initialization succeeds, the firmware fills a 1024-sample buffer with a squar
 
 ---
 
-#### 5.2 Raspberry Pi Pipeline (`main_CODE/`)
+#### 5.2 Raspberry Pi Pipeline (`rpi/pipeline/`)
 
 The Pi orchestrates all four stages of the translation pipeline. The entry point is `main_code.py`, which opens the UART port once at startup, loads the Llama model into memory, then loops indefinitely — one translation cycle per iteration.
 
