@@ -146,15 +146,23 @@ static void I2S3_Init_Bare(void) {
  * i2s_write_stereo — push one mono sample as L+R to MAX98357A
  ════════════════════════════════════════════════════════════════════════════ */
 static inline void i2s_write_stereo(int16_t sample) {
-    uint16_t s16 = (uint16_t)sample;
+    /* Apply gain check from your working code */
+    int32_t amp = (int32_t)sample * 8; // +18 dB gain as used in your working version
+    if (amp > 32767)  amp = 32767;
+    if (amp < -32768) amp = -32768;
+    uint16_t s16 = (uint16_t)(int16_t)amp;
 
-    /* LEFT */
+    // LEFT Channel (2 writes: Data then Zero Padding)
     while (!(SPI3->SR & SPI_SR_TXE));
     SPI3->DR = s16;
+    while (!(SPI3->SR & SPI_SR_TXE));
+    SPI3->DR = 0; // Padding
 
-    /* RIGHT */
+    // RIGHT Channel (2 writes: Data then Zero Padding)
     while (!(SPI3->SR & SPI_SR_TXE));
     SPI3->DR = s16;
+    while (!(SPI3->SR & SPI_SR_TXE));
+    SPI3->DR = 0; // Padding
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -249,7 +257,7 @@ static inline int ring_pop_sample(int16_t *out) {
 
     /* Wait for a buffer of 512 bytes (16ms) before starting to play.
        This prevents the "machine gun" underruns you see in your logs. */
-    if (avail < 512U) return 0;
+    if (avail < 2U) return 0;
 
     uint8_t lo = rx_ring[rx_tail];
     uint8_t hi = rx_ring[(rx_tail + 1U) & RX_RING_MASK];
