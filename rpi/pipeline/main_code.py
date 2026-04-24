@@ -31,6 +31,14 @@ SAMPLE_RATE    = 16000
 CHANNELS       = 1
 SAMPLE_WIDTH   = 2
 
+SPI_BUS         = 0       # /dev/spidev0.0
+SPI_DEVICE      = 0       # CE0
+SPI_SPEED_HZ    = 500_000 # start conservative — 500 kHz 
+
+
+
+
+
 WHISPER_BIN    = os.path.expanduser('~/whisper.cpp/build/bin/whisper-cli')
 WHISPER_MODEL  = os.path.expanduser('~/whisper.cpp/models/ggml-small.en.bin')
 
@@ -38,11 +46,6 @@ PIPER_BIN      = os.path.expanduser('~/piper/piper/piper')
 PIPER_MODEL    = os.path.expanduser('~/piper/es_MX-claude-high.onnx')
 
 OUTPUT_DIR     = str(Path(__file__).resolve().parent / "output")
-
-spi = spidev.SpiDev()
-spi.open(0, 0)
-spi.max_speed_hz = 500000
-spi.mode = 0
 
 # ══════════════════════════════════════════════════════════════════════════════
 # UART FRAMING (must match STM32 firmware)
@@ -159,15 +162,14 @@ def load_llama():
     return llm
 
 
-def translate(llm, original_text):
+def translate(llm, english_text):
     """Translate English text to Spanish using Llama."""
     print("\n[3/4] TRANSLATING to Spanish...")
     prompt = (
         "You are a medical interpreter. "
-        "First Interpret if this is English or Spanish."
-        "If this is Spanish, translate it to English. If this is English, translate it"
+        "Translate the following English text "
         "to Spanish. Output only the translation directly, nothing else no extra notes, speeches, rambles, or explanations.\n\n"
-        f"English: {original_text}\nSpanish:"
+        f"English: {english_text}\nSpanish:"
     )
     response = llm(prompt, max_tokens=512, temperature=0)
     spanish = response['choices'][0]['text'].strip()
@@ -175,36 +177,43 @@ def translate(llm, original_text):
     return spanish
 
 
-import spidev
-
 # ══════════════════════════════════════════════════════════════════════════════
-# SPI SETUP (add near the top of your file, after SETTINGS)
+# STEP 4: SPEAK (Piper TTS → UART → STM32 speaker)
 # ══════════════════════════════════════════════════════════════════════════════
 
-spi = spidev.SpiDev()
-spi.open(0, 0)
-spi.max_speed_hz = 500000
-spi.mode = 0
+def test_sine(spi, freq=440, duration=3):
+    import math
+    print(f"Playing {freq} Hz sine for {duration}s over SPI...")
+    n = SAMPLE_RATE * duration
+    samples = [int(16000 * math.sin(2 * math.pi * freq * i / SAMPLE_RATE)) 
+               for i in range(n)]
+    
+    CHUNK = 256
+    t0 = time.time()
+    sent = 0
+    for i in range(0, len(samples), CHUNK):
+        chunk = samples[i:i + CHUNK]
+        packet = struct.pack(f'>{len(chunk)}h', *chunk)
+        spi.xfer2(list(packet))
+        sent += len(chunk)
+        due = sent / SAMPLE_RATE
+        elapsed = time.time() - t0
+        if elapsed < due:
+            time.sleep(due - elapsed)
+    print(f"Done in {time.time()-t0:.2f}s")
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-# STEP 4: SPEAK (Piper TTS → SPI → STM32 I2S → MAX98357A)
-# ══════════════════════════════════════════════════════════════════════════════
-
-def synthesize_and_play(translated_text, wav_path):
-    """Synthesize Spanish speech with Piper, then stream to STM32 via SPI."""
+def synthesize_and_play(spi, spanish_text, wav_path):
+    """Synthesize Spanish speech with Piper, then stream to STM32 over SPI."""
     print("\n[4/4] SPEAKING Spanish...")
 
-    # Synthesize with Piper
-    result = subprocess.run(
-        [PIPER_BIN, '--model', PIPER_MODEL, '--output_file', wav_path],
-        input=translated_text.encode('utf-8'),
+    result = subprocess.run([
+        PIPER_BIN, '--model', PIPER_MODEL, '--output_file', wav_path],
+        input=spanish_text.encode('utf-8'),
         capture_output=True,
     )
     if result.returncode != 0:
         raise RuntimeError(f"Piper failed:\n{result.stderr.decode(errors='ignore')}")
 
-    # Read WAV
     with wave.open(wav_path) as wf:
         channels = wf.getnchannels()
         rate = wf.getframerate()
@@ -213,46 +222,38 @@ def synthesize_and_play(translated_text, wav_path):
 
     print(f"  Generated {n_frames/rate:.1f}s of audio at {rate} Hz")
 
-    # If stereo, downmix to mono bytes (little-endian 16-bit samples)
     if channels == 2:
         pairs = struct.unpack(f'<{n_frames*2}h', raw)
-        mono = [(pairs[i] + pairs[i+1]) // 2 for i in range(0, len(pairs), 2)]
-        raw = struct.pack(f'<{len(mono)}h', *mono)
+        samples = [(pairs[i] + pairs[i+1]) // 2 for i in range(0, len(pairs), 2)]
+    else:
+        samples = list(struct.unpack(f'<{n_frames}h', raw))
 
-    # Stream to STM32 over SPI using raw I2S frames
-    print(f"  Sending {n_frames} samples to STM32 via SPI...")
-    CHUNK_SAMPLES = 256
-    CHUNK_BYTES = CHUNK_SAMPLES * 2   # 2 bytes per 16-bit sample
+    # Resample if needed — STM32 I2S is locked to 16 kHz
+    if rate != SAMPLE_RATE:
+        print(f"  WARNING: Piper output is {rate} Hz, STM32 expects {SAMPLE_RATE} Hz")
+        print(f"  Audio will play at wrong pitch unless you resample.")
+
+    # Stream to STM32 over SPI
+    # Each sample is 16 bits. STM32 SPI2 is in 16-bit DFF mode.
+    # Pack as little-endian pairs of bytes. Order may need flipping — see note below.
+    print(f"  Sending {len(samples)} samples to STM32 over SPI...")
+    CHUNK = 256
     t0 = time.time()
-    samples_sent = 0
+    sent = 0
 
-    for offset in range(0, len(raw), CHUNK_BYTES):
-        chunk = raw[offset:offset + CHUNK_BYTES]
-        if len(chunk) < 2:
-            break
+    for i in range(0, len(samples), CHUNK):
+        chunk = samples[i:i + CHUNK]
+        # Pack as big-endian 16-bit: STM32 DFF shifts MSB first
+        packet = struct.pack(f'>{len(chunk)}h', *chunk)
+        spi.xfer2(list(packet))
+        sent += len(chunk)
 
-        # Build raw I2S frames: each mono sample → stereo frame
-        # [LEFT_HI, LEFT_LO, RIGHT_HI, RIGHT_LO]
-        i2s_frames = []
-        for i in range(0, len(chunk), 2):
-            lo = chunk[i]
-            hi = chunk[i + 1]
-            # left channel MSB first
-            i2s_frames.append(hi)
-            i2s_frames.append(lo)
-            # right channel same sample
-            i2s_frames.append(hi)
-            i2s_frames.append(lo)
-
-        spi.writebytes2(bytes(i2s_frames))
-
-        samples_sent += len(chunk) // 2
+        due = sent / SAMPLE_RATE
         elapsed = time.time() - t0
-        drift = (samples_sent / rate) - elapsed
-        if drift > 0:
-            time.sleep(drift)
+        if elapsed < due:
+            time.sleep(due - elapsed)
 
-    print(f"  Done. Sent {samples_sent} samples in {time.time() - t0:.1f}s.")
+    print(f"  Done. Sent {sent} samples in {time.time() - t0:.1f}s.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -284,11 +285,23 @@ def main():
         print(f"ERROR: {e}")
         print(f"Try: sudo chmod 666 {PORT}")
         return
+    
+    spi = None
+    try: 
+        spi = spidev.SpiDev()
+        spi.open(SPI_BUS, SPI_DEVICE)
+        spi.max_speed_hz = SPI_SPEED_HZ
+        spi.mode = 0  # CPOL=0, CPHA=0 — matches STM32 default
+        spi.bits_per_word = 8  # Pi only supports 8; we'll pack 16-bit samples as 2 bytes
+    except Exception as e: 
+        print(f"SPI setup failed: {e}")
+        spi.close()
+        return 
 
     cycle = 0
 
     try:
-        while True:
+        """ while True:
             cycle += 1
             timestamp = time.strftime('%Y%m%d_%H%M%S')
             print(f"\n{'─' * 50}")
@@ -306,28 +319,31 @@ def main():
                 continue
 
             # Step 2: Transcribe
-            original_text = transcribe(wav_path)
-            if not original_text:
+            english_text = transcribe(wav_path)
+            if not english_text:
                 print("  Skipping cycle — no speech detected.")
                 continue
 
             # Step 3: Translate
-            translated_text = translate(llm, original_text)
+            spanish_text = translate(llm, english_text)
 
             # Save translation locally
             with open(translation_file, 'w', encoding='utf-8') as f:
-                f.write(f"Original: {original_text}\nTranslated: {translated_text}\n")
+                f.write(f"English: {english_text}\nSpanish: {spanish_text}\n")
             print(f"  Saved translation to {translation_file}")
 
             # Step 4: Speak
-            synthesize_and_play(translated_text, piper_wav)
+            synthesize_and_play(spi, spanish_text, piper_wav)
 
-            time.sleep(0.5)
+            time.sleep(0.5)  """
+        test_sine(spi, freq=440, duration=5)
 
     except KeyboardInterrupt:
         print("\n\nStopped by user.")
     finally:
         ser.close()
+        if spi is not None:
+            spi.close()
         print("Port closed.")
 
 

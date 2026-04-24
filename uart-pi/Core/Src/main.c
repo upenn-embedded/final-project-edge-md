@@ -27,11 +27,25 @@
 #define FULL_BUF_SAMPLES    (HALF_BUF_SAMPLES * 2)
 #define UART_TX_HALF        (HALF_BUF_SAMPLES * 2)
 #define DC_BIAS_COUNTS      1551U
-#define RX_RING_SIZE        4096U
-#define RX_RING_MASK        (RX_RING_SIZE - 1U)
-static volatile uint8_t  rx_ring[RX_RING_SIZE];
-static volatile uint32_t rx_head = 0;
-static volatile uint32_t rx_tail = 0;
+#define SPI_RING_SIZE  8192U
+#define SPI_RING_MASK  (SPI_RING_SIZE - 1U)
+static volatile uint16_t spi_ring[SPI_RING_SIZE];
+static volatile uint32_t spi_head = 0;
+static volatile uint32_t spi_tail = 0;
+
+static inline void clear_spi_ovr(void) {
+    volatile uint16_t tmp  = SPI2->DR;
+    volatile uint32_t tmp2 = SPI2->SR;
+    (void)tmp; (void)tmp2;
+}
+
+static inline int spi_ring_pop(int16_t *out) {
+    if (spi_head == spi_tail) return 0;
+    *out = (int16_t)spi_ring[spi_tail];
+    spi_tail = (spi_tail + 1U) & SPI_RING_MASK;
+    return 1;
+}
+
 
 /* ── Handles ──────────────────────────────────────────────────────────────── */
 ADC_HandleTypeDef  hadc1;
@@ -93,6 +107,28 @@ void HAL_UART_MspInit(UART_HandleTypeDef *huart) {
         GPIO_InitStruct.Alternate = GPIO_AF7_USART2;
         HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
     }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * SPI2 Slave INIT
+ ════════════════════════════════════════════════════════════════════════════ */
+
+static void SPI2_Slave_Init(void) {
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    __HAL_RCC_SPI2_CLK_ENABLE();
+
+    GPIO_InitTypeDef g = {0};
+    /* PB12=NSS, PB13=SCK, PB15=MOSI — all AF5 */
+    g.Pin       = GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_15;
+    g.Mode      = GPIO_MODE_AF_PP;
+    g.Pull      = GPIO_NOPULL;
+    g.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
+    g.Alternate = GPIO_AF5_SPI2;
+    HAL_GPIO_Init(GPIOB, &g);
+
+    /* Slave, 16-bit DFF, hardware NSS input, RX only direction is fine */
+    SPI2->CR1 = SPI_CR1_DFF | SPI_CR1_SPE;
+    /* Note: MSTR=0 (slave), BR bits don't matter in slave, CPOL/CPHA=0 default */
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -244,25 +280,6 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
 
 
 /* ════════════════════════════════════════════════════════════════════════════
- * Ring Pop Sample
- ════════════════════════════════════════════════════════════════════════════ */
-static inline int ring_pop_sample(int16_t *out) {
-    uint32_t head  = (RX_RING_SIZE - DMA2_Stream5->NDTR) & RX_RING_MASK;
-    uint32_t avail = (head - rx_tail) & RX_RING_MASK;
-
-    /* Wait for a buffer of 512 bytes (16ms) before starting to play.
-       This prevents the "machine gun" underruns you see in your logs. */
-    if (avail < 2U) return 0;
-
-    uint8_t lo = rx_ring[rx_tail];
-    uint8_t hi = rx_ring[(rx_tail + 1U) & RX_RING_MASK];
-    rx_tail = (rx_tail + 2U) & RX_RING_MASK;
-
-    *out = (int16_t)((uint16_t)lo | ((uint16_t)hi << 8));
-    return 1;
-}
-
-/* ════════════════════════════════════════════════════════════════════════════
  * main
  ════════════════════════════════════════════════════════════════════════════ */
 int main(void) {
@@ -276,6 +293,7 @@ int main(void) {
     MX_ADC1_Init();
     TIM2_Init_Bare();
     I2S3_Init_Bare();
+    SPI2_Slave_Init();
 
     /* Banner on Mac */
     uint8_t banner[] = "=== RECORD + PLAYBACK READY ===\r\n";
@@ -293,8 +311,6 @@ int main(void) {
     /* Start mic ADC DMA */
     HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc_buf, FULL_BUF_SAMPLES);
 
-    HAL_UART_Receive_DMA(&huart1, (uint8_t *)rx_ring, RX_RING_SIZE);
-
 
     uint32_t sample_count   = 0;
 	uint32_t underrun_count = 0;
@@ -310,28 +326,39 @@ int main(void) {
 			ProcessAndSend(&adc_buf[HALF_BUF_SAMPLES], uart_tx_b);
 		}
 
+		if (SPI2->SR & SPI_SR_RXNE) {
+		    uint16_t v = SPI2->DR;
+		    uint32_t next = (spi_head + 1U) & SPI_RING_MASK;
+		    if (next != spi_tail) {
+		        spi_ring[spi_head] = v;
+		        spi_head = next;
+		    }
+		    /* else: ring full, drop sample */
+		}
+		if (SPI2->SR & SPI_SR_OVR) clear_spi_ovr();
+
+
 		/* ── PLAYBACK PATH — ring → I2S → MAX98357A ── */
 		int16_t sample;
-		if (ring_pop_sample(&sample)) {
-			i2s_write_stereo(sample);
+		if (spi_ring_pop(&sample)) {
+		    i2s_write_stereo(sample);
 		} else {
-			i2s_write_stereo(0);
-			underrun_count++;
+		    i2s_write_stereo(0);
+		    underrun_count++;
 		}
 
 		sample_count++;
 
 		/* Debug heartbeat once per ~16000 samples (~1 sec) */
 		if (sample_count % 16000U == 0U) {
-			uint32_t head  = (RX_RING_SIZE - DMA2_Stream5->NDTR) & RX_RING_MASK;
-			uint32_t depth = (head - rx_tail) & RX_RING_MASK;
-			uint8_t msg[64];
-			int len = snprintf((char *)msg, sizeof(msg),
-							   "[s=%lu ring=%lu under=%lu]\r\n",
-							   (unsigned long)sample_count,
-							   (unsigned long)depth,
-							   (unsigned long)underrun_count);
-			HAL_UART_Transmit(&huart2, msg, len, 10);
+		    uint32_t depth = (spi_head - spi_tail) & SPI_RING_MASK;
+		    uint8_t msg[64];
+		    int len = snprintf((char *)msg, sizeof(msg),
+		                       "[s=%lu ring=%lu under=%lu]\r\n",
+		                       (unsigned long)sample_count,
+		                       (unsigned long)depth,
+		                       (unsigned long)underrun_count);
+		    HAL_UART_Transmit(&huart2, msg, len, 10);
 		}
 	}
 }
@@ -429,23 +456,6 @@ static void MX_DMA_Init(void) {
     __HAL_LINKDMA(&huart1, hdmatx, hdma_usart1_tx);
     HAL_NVIC_SetPriority(DMA2_Stream7_IRQn, 1, 0);
     HAL_NVIC_EnableIRQ(DMA2_Stream7_IRQn);
-
-    /* USART1 RX -> DMA2 Stream5 Channel4 (circular) */
-        hdma_usart1_rx.Instance                 = DMA2_Stream5;
-        hdma_usart1_rx.Init.Channel             = DMA_CHANNEL_4;
-        hdma_usart1_rx.Init.Direction           = DMA_PERIPH_TO_MEMORY;
-        hdma_usart1_rx.Init.PeriphInc           = DMA_PINC_DISABLE;
-        hdma_usart1_rx.Init.MemInc              = DMA_MINC_ENABLE;
-        hdma_usart1_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
-        hdma_usart1_rx.Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;
-        hdma_usart1_rx.Init.Mode                = DMA_CIRCULAR;
-        hdma_usart1_rx.Init.Priority            = DMA_PRIORITY_HIGH;
-        hdma_usart1_rx.Init.FIFOMode            = DMA_FIFOMODE_DISABLE;
-        if (HAL_DMA_Init(&hdma_usart1_rx) != HAL_OK) Error_Handler();
-        __HAL_LINKDMA(&huart1, hdmarx, hdma_usart1_rx);
-        /* DMA RX IRQ not needed (circular, we poll NDTR), but enable for HAL */
-        HAL_NVIC_SetPriority(DMA2_Stream5_IRQn, 1, 0);
-        HAL_NVIC_EnableIRQ(DMA2_Stream5_IRQn);
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -484,7 +494,6 @@ static void MX_USART2_UART_Init(void) {
 void DMA2_Stream0_IRQHandler(void) { HAL_DMA_IRQHandler(&hdma_adc1);      }
 void DMA2_Stream7_IRQHandler(void) { HAL_DMA_IRQHandler(&hdma_usart1_tx); }
 void USART1_IRQHandler(void)       { HAL_UART_IRQHandler(&huart1);        }
-void DMA2_Stream5_IRQHandler(void) { HAL_DMA_IRQHandler(&hdma_usart1_rx); }
 
 void Error_Handler(void) {
     __disable_irq();
