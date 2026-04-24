@@ -153,13 +153,15 @@ def load_llama():
     return llm
 
 
-def translate(llm, english_text):
+def translate(llm, original_text):
     """Translate English text to Spanish using Llama."""
     print("\n[3/4] TRANSLATING to Spanish...")
     prompt = (
-        "You are a medical interpreter. Translate the following English text "
-        "to Spanish. Output only the Spanish translation directly, nothing else no extra notes, speeches, rambles, or explanations.\n\n"
-        f"English: {english_text}\nSpanish:"
+        "You are a medical interpreter. "
+        "First Interpret if this is English or Spanish."
+        "If this is Spanish, translate it to English. If this is English, translate it"
+        "to Spanish. Output only the translation directly, nothing else no extra notes, speeches, rambles, or explanations.\n\n"
+        f"English: {original_text_text}\nSpanish:"
     )
     response = llm(prompt, max_tokens=512, temperature=0)
     spanish = response['choices'][0]['text'].strip()
@@ -171,14 +173,14 @@ def translate(llm, english_text):
 # STEP 4: SPEAK (Piper TTS → UART → STM32 speaker)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def synthesize_and_play(ser, spanish_text, wav_path):
+def synthesize_and_play(ser, stranslated_text, wav_path):
     """Synthesize Spanish speech with Piper, then stream to STM32."""
     print("\n[4/4] SPEAKING Spanish...")
 
     # Synthesize with Piper
     result = subprocess.run([
         PIPER_BIN, '--model', PIPER_MODEL, '--output_file', wav_path],
-        input=spanish_text.encode('utf-8'),
+        input=translated_text.encode('utf-8'),
         capture_output=True,
     )
     if result.returncode != 0:
@@ -274,21 +276,21 @@ def main():
                 continue
 
             # Step 2: Transcribe
-            english_text = transcribe(wav_path)
-            if not english_text:
+            original_text = transcribe(wav_path)
+            if not original_text:
                 print("  Skipping cycle — no speech detected.")
                 continue
 
             # Step 3: Translate
-            spanish_text = translate(llm, english_text)
+            translated_text = translate(llm, original_text)
 
             # Save translation locally
             with open(translation_file, 'w', encoding='utf-8') as f:
-                f.write(f"English: {english_text}\nSpanish: {spanish_text}\n")
+                f.write(f"Original: {original_text}\nTranslated: {translated_text}\n")
             print(f"  Saved translation to {translation_file}")
 
             # Step 4: Speak
-            synthesize_and_play(ser, spanish_text, piper_wav)
+            synthesize_and_play(ser, translated_text, piper_wav)
 
             time.sleep(0.5)
 

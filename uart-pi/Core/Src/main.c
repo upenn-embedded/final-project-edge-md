@@ -121,7 +121,7 @@ static void I2S3_Init_Bare(void) {
     /* Configure PLLI2S: HSI 16MHz / M=16 * N=192 / R=2 = 96 MHz */
     RCC->CR &= ~RCC_CR_PLLI2SON;
     while (RCC->CR & RCC_CR_PLLI2SRDY);
-    RCC->PLLI2SCFGR = (16U << 0) | (192U << 6) | (2U << 28);
+    RCC->PLLI2SCFGR = (192U << 6) | (2U << 28);
     RCC->CR |= RCC_CR_PLLI2SON;
     while (!(RCC->CR & RCC_CR_PLLI2SRDY));
 
@@ -146,23 +146,18 @@ static void I2S3_Init_Bare(void) {
  * i2s_write_stereo — push one mono sample as L+R to MAX98357A
  ════════════════════════════════════════════════════════════════════════════ */
 static inline void i2s_write_stereo(int16_t sample) {
-    /* Apply gain check from your working code */
-    int32_t amp = (int32_t)sample * 8; // +18 dB gain as used in your working version
+    int32_t amp = (int32_t)sample * 8;
     if (amp > 32767)  amp = 32767;
     if (amp < -32768) amp = -32768;
     uint16_t s16 = (uint16_t)(int16_t)amp;
 
-    // LEFT Channel (2 writes: Data then Zero Padding)
+    /* LEFT channel — one 16-bit write */
     while (!(SPI3->SR & SPI_SR_TXE));
     SPI3->DR = s16;
-    while (!(SPI3->SR & SPI_SR_TXE));
-    SPI3->DR = 0; // Padding
 
-    // RIGHT Channel (2 writes: Data then Zero Padding)
+    /* RIGHT channel — one 16-bit write */
     while (!(SPI3->SR & SPI_SR_TXE));
     SPI3->DR = s16;
-    while (!(SPI3->SR & SPI_SR_TXE));
-    SPI3->DR = 0; // Padding
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
