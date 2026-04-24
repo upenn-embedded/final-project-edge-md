@@ -45,7 +45,7 @@ WHISPER_MODEL  = os.path.expanduser('~/whisper.cpp/models/ggml-small.en.bin')
 PIPER_BIN      = os.path.expanduser('~/piper/piper/piper')
 PIPER_MODEL    = os.path.expanduser('~/piper/es_MX-claude-high.onnx')
 
-OUTPUT_DIR     = str(Path(__file__).resolve().parent / "output")
+OUTPUT_DIR     = str(Path(__file__).resolve().parent / "pipeline")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # UART FRAMING (must match STM32 firmware)
