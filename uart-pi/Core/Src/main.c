@@ -32,11 +32,14 @@
 static volatile uint16_t spi_ring[SPI_RING_SIZE];
 static volatile uint32_t spi_head = 0;
 static volatile uint32_t spi_tail = 0;
+static volatile uint32_t ovr_count = 0;
+static volatile uint32_t spi_sr_snapshot = 0;
 
 static inline void clear_spi_ovr(void) {
     volatile uint16_t tmp  = SPI2->DR;
     volatile uint32_t tmp2 = SPI2->SR;
     (void)tmp; (void)tmp2;
+    ovr_count++;
 }
 
 static inline int spi_ring_pop(int16_t *out) {
@@ -60,9 +63,12 @@ static uint16_t adc_buf[FULL_BUF_SAMPLES];
 static uint8_t  uart_tx_a[UART_TX_HALF];
 static uint8_t  uart_tx_b[UART_TX_HALF];
 
+
+
 /* ── Flags ────────────────────────────────────────────────────────────────── */
 static volatile uint8_t adc_half_rdy = 0;
 static volatile uint8_t adc_full_rdy = 0;
+
 
 /* ── Forward declarations ─────────────────────────────────────────────────── */
 void SystemClock_Config(void);
@@ -118,8 +124,8 @@ static void SPI2_Slave_Init(void) {
     __HAL_RCC_SPI2_CLK_ENABLE();
 
     GPIO_InitTypeDef g = {0};
-    /* PB12=NSS, PB13=SCK, PB15=MOSI — all AF5 */
-    g.Pin       = GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_15;
+    /* PB13 = SCK, PB15 = MOSI — AF5 */
+    g.Pin       = GPIO_PIN_13 | GPIO_PIN_15;
     g.Mode      = GPIO_MODE_AF_PP;
     g.Pull      = GPIO_NOPULL;
     g.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
@@ -127,7 +133,8 @@ static void SPI2_Slave_Init(void) {
     HAL_GPIO_Init(GPIOB, &g);
 
     /* Slave, 16-bit DFF, hardware NSS input, RX only direction is fine */
-    SPI2->CR1 = SPI_CR1_DFF | SPI_CR1_SPE;
+    SPI2->CR1 = SPI_CR1_DFF | SPI_CR1_SSM | SPI_CR1_SPE;
+    SPI2->CR2 = 0;  // explicitly clear SSOE and other CR2 bits
     /* Note: MSTR=0 (slave), BR bits don't matter in slave, CPOL/CPHA=0 default */
 }
 
@@ -352,12 +359,15 @@ int main(void) {
 		/* Debug heartbeat once per ~16000 samples (~1 sec) */
 		if (sample_count % 16000U == 0U) {
 		    uint32_t depth = (spi_head - spi_tail) & SPI_RING_MASK;
-		    uint8_t msg[64];
+		    spi_sr_snapshot = SPI2->SR;  // capture current SPI2 status register
+		    uint8_t msg[96];
 		    int len = snprintf((char *)msg, sizeof(msg),
-		                       "[s=%lu ring=%lu under=%lu]\r\n",
+		                       "[s=%lu ring=%lu under=%lu ovr=%lu sr=0x%04lx]\r\n",
 		                       (unsigned long)sample_count,
 		                       (unsigned long)depth,
-		                       (unsigned long)underrun_count);
+		                       (unsigned long)underrun_count,
+		                       (unsigned long)ovr_count,
+		                       (unsigned long)spi_sr_snapshot);
 		    HAL_UART_Transmit(&huart2, msg, len, 10);
 		}
 	}
@@ -499,3 +509,4 @@ void Error_Handler(void) {
     __disable_irq();
     while (1) {}
 }
+

@@ -301,7 +301,7 @@ def main():
     cycle = 0
 
     try:
-        """ while True:
+        while True:
             cycle += 1
             timestamp = time.strftime('%Y%m%d_%H%M%S')
             print(f"\n{'─' * 50}")
@@ -335,8 +335,8 @@ def main():
             # Step 4: Speak
             synthesize_and_play(spi, spanish_text, piper_wav)
 
-            time.sleep(0.5)  """
-        test_sine(spi, freq=440, duration=5)
+            time.sleep(0.5)
+
 
     except KeyboardInterrupt:
         print("\n\nStopped by user.")
