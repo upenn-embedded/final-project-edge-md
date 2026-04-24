@@ -25,7 +25,7 @@ import serial
 
 PORT           = "/dev/ttyAMA0"
 BAUD           = 921600
-RECORD_SECONDS = 10
+RECORD_SECONDS = 5
 SAMPLE_RATE    = 16000
 CHANNELS       = 1
 SAMPLE_WIDTH   = 2
