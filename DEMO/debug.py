@@ -1,9 +1,18 @@
+"""
+Play a WAV on the Pi via SPI → STM32 I2S → speaker.
+
+All demo WAVs live in ./Output/ — pass a filename or use the default.
+
+  python3 debug.py
+  python3 debug.py Output/spanish_20260424_120000.wav
+  python3 debug.py spanish_16k.wav
+"""
 
 import spidev
 import wave
 import sys
 import time
-import struct
+from pathlib import Path
 
 spi = spidev.SpiDev()
 spi.open(0, 0)
@@ -12,9 +21,23 @@ spi.mode = 0
 
 SAMPLE_RATE = 16000
 
+_DEMO_ROOT = Path(__file__).resolve().parent
+OUTPUT_DIR = _DEMO_ROOT / "Output"
+
+
+def resolve_wav_path(arg: str) -> Path:
+    p = Path(arg)
+    if p.is_file():
+        return p.resolve()
+    in_output = OUTPUT_DIR / arg
+    if in_output.is_file():
+        return in_output.resolve()
+    return p.resolve()
+
+
 def stream_wav(filename):
-    wf = wave.open(filename, 'rb')
-    n_frames  = wf.getnframes()
+    wf = wave.open(str(filename), 'rb')
+    n_frames = wf.getnframes()
     framerate = wf.getframerate()
     print(f'Playing: {filename} {n_frames/framerate:.2f}s')
 
@@ -26,16 +49,12 @@ def stream_wav(filename):
         if not raw:
             break
 
-        # build raw I2S frames: each mono sample → stereo frame
-        # [LEFT_HI, LEFT_LO, RIGHT_HI, RIGHT_LO]
         i2s_frames = []
         for i in range(0, len(raw), 2):
             lo = raw[i]
-            hi = raw[i+1]
-            # left channel MSB first
+            hi = raw[i + 1]
             i2s_frames.append(hi)
             i2s_frames.append(lo)
-            # right channel same sample
             i2s_frames.append(hi)
             i2s_frames.append(lo)
 
@@ -50,11 +69,23 @@ def stream_wav(filename):
     wf.close()
     print('Done.')
 
-try:
-    filename = sys.argv[1] if len(sys.argv) > 1 else 'spanish_16k.wav'
-    while True:
-        stream_wav(filename)
-except KeyboardInterrupt:
-    print('\nStopped.')
-finally:
-    spi.close()
+
+if __name__ == '__main__':
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    default_wav = OUTPUT_DIR / 'spanish_16k.wav'
+    if len(sys.argv) > 1:
+        wav = resolve_wav_path(sys.argv[1])
+    else:
+        wav = default_wav if default_wav.is_file() else Path('spanish_16k.wav')
+
+    try:
+        while True:
+            if not wav.is_file():
+                print(f'WAV not found: {wav}')
+                print(f'Put a file in {OUTPUT_DIR} or pass its path.')
+                break
+            stream_wav(wav)
+    except KeyboardInterrupt:
+        print('\nStopped.')
+    finally:
+        spi.close()
