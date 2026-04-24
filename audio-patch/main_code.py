@@ -102,11 +102,6 @@ def resample_pcm16_mono(samples, src_rate, dst_rate):
     return out
 
 
-def pcm16_le_packet(chunk):
-    """Raw little-endian int16 bytes for STM32 playback (ring_pop_sample)."""
-    return struct.pack(f'<{len(chunk)}h', *chunk)
-
-
 # ══════════════════════════════════════════════════════════════════════════════
 # STEP 1: RECORD
 # ══════════════════════════════════════════════════════════════════════════════
@@ -250,24 +245,31 @@ def synthesize_and_play(ser, spanish_text, wav_path):
         print(f"  Resampling {rate} Hz → {SAMPLE_RATE} Hz ({len(samples)} samples)")
         samples = resample_pcm16_mono(samples, rate, SAMPLE_RATE)
 
-    # Optional: save what we actually send (debug)
-    debug_wav = os.path.splitext(wav_path)[0] + f'_uart_{SAMPLE_RATE}hz.wav'
+    # Exact bytes sent on UART = raw s16le mono (no WAV header)
+    pcm_blob = struct.pack(f'<{len(samples)}h', *samples)
+
+    base = os.path.splitext(wav_path)[0] + f'_uart_{SAMPLE_RATE}hz'
+    debug_wav = base + '.wav'
+    debug_raw = base + '.raw'
     with wave.open(debug_wav, 'w') as wf:
         wf.setnchannels(1)
         wf.setsampwidth(2)
         wf.setframerate(SAMPLE_RATE)
-        wf.writeframes(struct.pack(f'<{len(samples)}h', *samples))
+        wf.writeframes(pcm_blob)
+    with open(debug_raw, 'wb') as f:
+        f.write(pcm_blob)
     print(f"  Debug UART WAV: {debug_wav}")
+    print(f"  Debug UART RAW: {debug_raw} (same bytes as serial stream)")
 
     print(f"  Sending {len(samples)} samples @ {SAMPLE_RATE} Hz (raw PCM16 LE)...")
-    CHUNK = 256
+    CHUNK_SAMPLES = 256
+    CHUNK_BYTES = CHUNK_SAMPLES * 2
     t0 = time.time()
     sent = 0
 
-    for i in range(0, len(samples), CHUNK):
-        chunk = samples[i:i + CHUNK]
-        ser.write(pcm16_le_packet(chunk))
-        sent += len(chunk)
+    for off in range(0, len(pcm_blob), CHUNK_BYTES):
+        ser.write(pcm_blob[off:off + CHUNK_BYTES])
+        sent += min(CHUNK_BYTES, len(pcm_blob) - off) // 2
 
         due = sent / SAMPLE_RATE
         elapsed = time.time() - t0
