@@ -1,4 +1,3 @@
-
 import spidev
 import wave
 import sys
