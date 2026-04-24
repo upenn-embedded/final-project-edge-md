@@ -18,6 +18,7 @@ import wave
 from pathlib import Path
 
 import serial
+import spidev
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SETTINGS
@@ -37,6 +38,11 @@ PIPER_BIN      = os.path.expanduser('~/piper/piper/piper')
 PIPER_MODEL    = os.path.expanduser('~/piper/es_MX-claude-high.onnx')
 
 OUTPUT_DIR     = str(Path(__file__).resolve().parent / "output")
+
+spi = spidev.SpiDev()
+spi.open(0, 0)
+spi.max_speed_hz = 500000
+spi.mode = 0
 
 # ══════════════════════════════════════════════════════════════════════════════
 # UART FRAMING (must match STM32 firmware)
@@ -161,7 +167,7 @@ def translate(llm, original_text):
         "First Interpret if this is English or Spanish."
         "If this is Spanish, translate it to English. If this is English, translate it"
         "to Spanish. Output only the translation directly, nothing else no extra notes, speeches, rambles, or explanations.\n\n"
-        f"English: {original_text_text}\nSpanish:"
+        f"English: {original_text}\nSpanish:"
     )
     response = llm(prompt, max_tokens=512, temperature=0)
     spanish = response['choices'][0]['text'].strip()
@@ -169,17 +175,29 @@ def translate(llm, original_text):
     return spanish
 
 
+import spidev
+
 # ══════════════════════════════════════════════════════════════════════════════
-# STEP 4: SPEAK (Piper TTS → UART → STM32 speaker)
+# SPI SETUP (add near the top of your file, after SETTINGS)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def synthesize_and_play(ser, stranslated_text, wav_path):
-    """Synthesize Spanish speech with Piper, then stream to STM32."""
+spi = spidev.SpiDev()
+spi.open(0, 0)
+spi.max_speed_hz = 500000
+spi.mode = 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# STEP 4: SPEAK (Piper TTS → SPI → STM32 I2S → MAX98357A)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def synthesize_and_play(translated_text, wav_path):
+    """Synthesize Spanish speech with Piper, then stream to STM32 via SPI."""
     print("\n[4/4] SPEAKING Spanish...")
 
     # Synthesize with Piper
-    result = subprocess.run([
-        PIPER_BIN, '--model', PIPER_MODEL, '--output_file', wav_path],
+    result = subprocess.run(
+        [PIPER_BIN, '--model', PIPER_MODEL, '--output_file', wav_path],
         input=translated_text.encode('utf-8'),
         capture_output=True,
     )
@@ -195,34 +213,46 @@ def synthesize_and_play(ser, stranslated_text, wav_path):
 
     print(f"  Generated {n_frames/rate:.1f}s of audio at {rate} Hz")
 
+    # If stereo, downmix to mono bytes (little-endian 16-bit samples)
     if channels == 2:
         pairs = struct.unpack(f'<{n_frames*2}h', raw)
-        samples = [(pairs[i] + pairs[i+1]) // 2 for i in range(0, len(pairs), 2)]
-        # Note we use pairs here to so that we can seperate the data we send to each side of the speaker.
-    else:
-        samples = list(struct.unpack(f'<{n_frames}h', raw)) 
-        # Convert to a list so that we can easily iterate through it and 
-        # send it to the speaker. We also need to convert it to a list because the struct.unpack returns a tuple, 
-        # and tuples are immutable, so we can't modify them directly. By converting it to a list, we can easily modify the samples if needed before sending them to the speaker.
+        mono = [(pairs[i] + pairs[i+1]) // 2 for i in range(0, len(pairs), 2)]
+        raw = struct.pack(f'<{len(mono)}h', *mono)
 
-    # Stream to STM32
-    print(f"  Sending {len(samples)} samples to STM32...")
-    CHUNK = 256
+    # Stream to STM32 over SPI using raw I2S frames
+    print(f"  Sending {n_frames} samples to STM32 via SPI...")
+    CHUNK_SAMPLES = 256
+    CHUNK_BYTES = CHUNK_SAMPLES * 2   # 2 bytes per 16-bit sample
     t0 = time.time()
-    sent = 0
+    samples_sent = 0
 
-    for i in range(0, len(samples), CHUNK):
-        chunk = samples[i: i + CHUNK]
-        packet = b''.join(encode_sample(s) for s in chunk)
-        ser.write(packet)
-        sent += len(chunk)
+    for offset in range(0, len(raw), CHUNK_BYTES):
+        chunk = raw[offset:offset + CHUNK_BYTES]
+        if len(chunk) < 2:
+            break
 
-        due = sent / rate
+        # Build raw I2S frames: each mono sample → stereo frame
+        # [LEFT_HI, LEFT_LO, RIGHT_HI, RIGHT_LO]
+        i2s_frames = []
+        for i in range(0, len(chunk), 2):
+            lo = chunk[i]
+            hi = chunk[i + 1]
+            # left channel MSB first
+            i2s_frames.append(hi)
+            i2s_frames.append(lo)
+            # right channel same sample
+            i2s_frames.append(hi)
+            i2s_frames.append(lo)
+
+        spi.writebytes2(bytes(i2s_frames))
+
+        samples_sent += len(chunk) // 2
         elapsed = time.time() - t0
-        if elapsed < due:
-            time.sleep(due - elapsed)
+        drift = (samples_sent / rate) - elapsed
+        if drift > 0:
+            time.sleep(drift)
 
-    print(f"  Done. Sent {sent} samples in {time.time() - t0:.1f}s.")
+    print(f"  Done. Sent {samples_sent} samples in {time.time() - t0:.1f}s.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -290,7 +320,7 @@ def main():
             print(f"  Saved translation to {translation_file}")
 
             # Step 4: Speak
-            synthesize_and_play(ser, translated_text, piper_wav)
+            synthesize_and_play(translated_text, piper_wav)
 
             time.sleep(0.5)
 
