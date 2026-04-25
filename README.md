@@ -401,7 +401,7 @@ If you’ve never made a GitHub pages website before, you can follow this webpag
 
 ### 2. Images
 
-
+![Night before demo day](media/IMG_1928.jpg)
 
 ### 3. Results
 
