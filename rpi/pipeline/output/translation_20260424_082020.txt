@@ -1,0 +1,2 @@
+English: this architecture and we are trying to make it work where we have mixed
+Spanish: Esta arquitectura y estamos tratando de hacerla funcionar donde tenemos mezcla.
