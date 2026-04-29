@@ -1,389 +1,651 @@
-/**
- ******************************************************************************
- * @file    main.c
- * @brief   Full duplex — mic recording + audio playback
- *
- * RECORD:   MAX9814 -> PA0 (ADC) -> TIM2 16kHz -> PA9 UART TX -> RPi
- * PLAYBACK: RPi -> PA10 UART RX -> sigma-delta -> PA8 speaker
- * DEBUG:    PA2 USART2 TX -> Mac via ST-Link
- *
- * Wiring:
- *   MAX9814 OUT  -> PA0  (CN7  pin 28)
- *   MAX9814 VDD  -> 3.3V (CN6  pin 4)
- *   MAX9814 GND  -> GND  (CN6  pin 6)
- *   PA9  (CN5  pin 1)   -> RPi Pin 10 (RX)   mic audio out
- *   PA10 (CN10 pin 33)  -> RPi Pin 8  (TX)   playback audio in
- *   PA8  (CN10 pin 23)  -> Speaker +
- *   GND  (CN6  pin 6)   -> Speaker -
- ******************************************************************************
+#include "stm32f4xx.h"
+
+#include <stdint.h>
+
+
+
+/* ═══════════════════════════════════════════════════
+
+ * CONFIGURATION
+
+ * ═══════════════════════════════════════════════════ */
+
+#define SAMPLE_RATE         16000U
+
+#define RECORD_SAMPLES      (SAMPLE_RATE * 5)
+
+#define DC_BIAS             2048U
+
+#define BUF_SIZE            61440U
+
+
+
+/* Playback tuning knobs
+
+ * PREBUF_THRESHOLD : words buffered before first sound (~20ms at 16kHz stereo)
+
+ * UNDERRUN_GUARD   : minimum words before we stall drain (~5ms headroom)
+
+ * IDLE_TIMEOUT_LOOPS: consecutive empty-SPI loops before declaring stream done
+
+ *                     Tune this to your loop speed. ~80000 ≈ 5–10ms on a tight loop.
+
  */
 
-#include "main.h"
-#include <stdint.h>
-#include <stdio.h>
+#define PREBUF_THRESHOLD    640U
 
-/* ── Audio config ─────────────────────────────────────────────────────────── */
-#define HALF_BUF_SAMPLES    256U
-#define FULL_BUF_SAMPLES    (HALF_BUF_SAMPLES * 2)
-#define UART_TX_HALF        (HALF_BUF_SAMPLES * 2)
-#define DC_BIAS_COUNTS      1551U
+#define UNDERRUN_GUARD      160U
 
-/* ── Handles ──────────────────────────────────────────────────────────────── */
-ADC_HandleTypeDef  hadc1;
-DMA_HandleTypeDef  hdma_adc1;
-UART_HandleTypeDef huart1;   // RPi — PA9 TX, PA10 RX
-UART_HandleTypeDef huart2;   // Mac debug — PA2 TX
-DMA_HandleTypeDef  hdma_usart1_tx;
+#define IDLE_TIMEOUT_LOOPS  80000U
 
-/* ── Record buffers ───────────────────────────────────────────────────────── */
-static uint16_t adc_buf[FULL_BUF_SAMPLES];
-static uint8_t  uart_tx_a[UART_TX_HALF];
-static uint8_t  uart_tx_b[UART_TX_HALF];
 
-/* ── Flags ────────────────────────────────────────────────────────────────── */
-static volatile uint8_t adc_half_rdy = 0;
-static volatile uint8_t adc_full_rdy = 0;
 
-/* ── Forward declarations ─────────────────────────────────────────────────── */
-void SystemClock_Config(void);
-void Error_Handler(void);
-static void TIM2_Init_Bare(void);
-static void MX_DMA_Init(void);
-static void MX_ADC1_Init(void);
-static void MX_USART1_UART_Init(void);
-static void MX_USART2_UART_Init(void);
-static void MX_GPIO_Init(void);
-static void ProcessAndSend(const uint16_t *raw, uint8_t *out);
+/* ═══════════════════════════════════════════════════
 
-/* ════════════════════════════════════════════════════════════════════════════
- * HAL_UART_MspInit
- ════════════════════════════════════════════════════════════════════════════ */
-void HAL_UART_MspInit(UART_HandleTypeDef *huart) {
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
+ * CIRCULAR BUFFER
 
-    if (huart->Instance == USART1) {
-        __HAL_RCC_USART1_CLK_ENABLE();
-        __HAL_RCC_GPIOA_CLK_ENABLE();
-        /* PA9=TX, PA10=RX */
-        GPIO_InitStruct.Pin       = GPIO_PIN_9 | GPIO_PIN_10;
-        GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
-        GPIO_InitStruct.Pull      = GPIO_PULLUP;
-        GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_HIGH;
-        GPIO_InitStruct.Alternate = GPIO_AF7_USART1;
-        HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+ * ═══════════════════════════════════════════════════ */
 
-        HAL_NVIC_SetPriority(USART1_IRQn, 1, 0);
-        HAL_NVIC_EnableIRQ(USART1_IRQn);
+static uint16_t          audio_buf[BUF_SIZE];
+
+static volatile uint32_t buf_head = 0;
+
+static volatile uint32_t buf_tail = 0;
+
+
+
+static inline int      buf_empty(void) { return buf_head == buf_tail; }
+
+static inline int      buf_full(void)  { return ((buf_head + 1) % BUF_SIZE) == buf_tail; }
+
+static inline void     buf_push(uint16_t v) { audio_buf[buf_head] = v; buf_head = (buf_head + 1) % BUF_SIZE; }
+
+static inline uint16_t buf_pop(void)        { uint16_t v = audio_buf[buf_tail]; buf_tail = (buf_tail + 1) % BUF_SIZE; return v; }
+
+
+
+static inline uint32_t buf_level(void) { return (buf_head - buf_tail + BUF_SIZE) % BUF_SIZE; }
+
+
+
+/* ═══════════════════════════════════════════════════
+
+ * SPI HELPERS
+
+ * ═══════════════════════════════════════════════════ */
+
+static inline void clear_spi_ovr(void) {
+
+    volatile uint16_t tmp  = SPI2->DR;
+
+    volatile uint32_t tmp2 = SPI2->SR;
+
+    (void)tmp; (void)tmp2;
+
+}
+
+
+
+static void spi2_flush(void) {
+
+    while (SPI2->SR & SPI_SR_RXNE) {
+
+        volatile uint16_t tmp = SPI2->DR;
+
+        (void)tmp;
+
     }
 
-    if (huart->Instance == USART2) {
-        __HAL_RCC_USART2_CLK_ENABLE();
-        __HAL_RCC_GPIOA_CLK_ENABLE();
-        /* PA2=TX to Mac */
-        GPIO_InitStruct.Pin       = GPIO_PIN_2;
-        GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
-        GPIO_InitStruct.Pull      = GPIO_NOPULL;
-        GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_HIGH;
-        GPIO_InitStruct.Alternate = GPIO_AF7_USART2;
-        HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-    }
+    if (SPI2->SR & SPI_SR_OVR) clear_spi_ovr();
+
+    buf_head = 0;
+
+    buf_tail = 0;
+
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
- * HAL_ADC_MspInit
- ════════════════════════════════════════════════════════════════════════════ */
-void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc) {
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-    if (hadc->Instance == ADC1) {
-        __HAL_RCC_ADC1_CLK_ENABLE();
-        __HAL_RCC_GPIOA_CLK_ENABLE();
-        GPIO_InitStruct.Pin  = GPIO_PIN_0;
-        GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
-        GPIO_InitStruct.Pull = GPIO_NOPULL;
-        HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-    }
+
+
+/* ═══════════════════════════════════════════════════
+
+ * CLOCK
+
+ * ═══════════════════════════════════════════════════ */
+
+void SystemClock_Config_Bare(void) {
+
+    RCC->CR |= RCC_CR_HSION;
+
+    while (!(RCC->CR & RCC_CR_HSIRDY));
+
+
+
+    FLASH->ACR = FLASH_ACR_LATENCY_2WS | FLASH_ACR_PRFTEN |
+
+                 FLASH_ACR_ICEN | FLASH_ACR_DCEN;
+
+
+
+    RCC->PLLCFGR = (16 << 0) | (336 << 6) | (1 << 16);
+
+    RCC->CR |= RCC_CR_PLLON;
+
+    while (!(RCC->CR & RCC_CR_PLLRDY));
+
+
+
+    RCC->PLLI2SCFGR = (16 << 0) | (192 << 6) | (2 << 28);
+
+    RCC->CR |= RCC_CR_PLLI2SON;
+
+    while (!(RCC->CR & RCC_CR_PLLI2SRDY));
+
+
+
+    RCC->CFGR  = RCC_CFGR_PPRE1_DIV2;
+
+    RCC->CFGR |= RCC_CFGR_SW_PLL;
+
+    while ((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_PLL);
+
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
- * MX_GPIO_Init
- ════════════════════════════════════════════════════════════════════════════ */
-static void MX_GPIO_Init(void) {
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-    __HAL_RCC_GPIOA_CLK_ENABLE();
 
-    /* PA8 = speaker output — max speed for sigma-delta */
-    GPIO_InitStruct.Pin   = GPIO_PIN_8;
-    GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull  = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-    /* PA5 = onboard LED */
-    GPIO_InitStruct.Pin   = GPIO_PIN_5;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+/* ═══════════════════════════════════════════════════
 
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET);
+ * DELAY
+
+ * ═══════════════════════════════════════════════════ */
+
+static void delay_ms(uint32_t ms) {
+
+    for (volatile uint32_t i = 0; i < ms * 8400; i++);
+
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
- * TIM2_Init_Bare — 16kHz ADC trigger, no HAL TIM needed
- ════════════════════════════════════════════════════════════════════════════ */
-static void TIM2_Init_Bare(void) {
-    RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
-    __DSB();
-    TIM2->CR1  = 0;
-    TIM2->PSC  = 0;
-    TIM2->ARR  = 5249;           // 84MHz / 5250 = 16kHz
-    TIM2->CNT  = 0;
-    TIM2->CR2  = TIM_CR2_MMS_1; // TRGO = update event
-    TIM2->EGR  = TIM_EGR_UG;
-    TIM2->SR   = 0;
-    TIM2->CR1  = TIM_CR1_CEN;
+
+
+/* ═══════════════════════════════════════════════════
+
+ * ADC
+
+ * ═══════════════════════════════════════════════════ */
+
+static void adc_init(void) {
+
+    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
+
+    RCC->APB2ENR |= RCC_APB2ENR_ADC1EN;
+
+
+
+    GPIOA->MODER |= (3 << (0 * 2));   // PA0 analog
+
+
+
+    ADC1->CR1   = 0;
+
+    ADC1->CR2   = 0;
+
+    ADC1->SQR3  = 0;
+
+    ADC1->SQR1  = 0;
+
+    ADC1->SMPR2 = (7 << 0);           // max sample time on CH0
+
+
+
+    ADC1->CR2  |= ADC_CR2_ADON;
+
+    delay_ms(1);
+
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
- * ProcessAndSend — ADC samples -> 2-byte frames -> RPi via UART TX DMA
- ════════════════════════════════════════════════════════════════════════════ */
-static void ProcessAndSend(const uint16_t *raw, uint8_t *out) {
-    for (uint32_t i = 0; i < HALF_BUF_SAMPLES; i++) {
-        int32_t s = (int32_t)raw[i] - DC_BIAS_COUNTS;
-        if      (s >  2047) s =  2047;
-        else if (s < -2048) s = -2048;
-        uint16_t v = (uint16_t)(s + 2048);
-        out[i * 2 + 0] = 0x80 | (v >> 6);
-        out[i * 2 + 1] =         v & 0x3F;
-    }
-    if (HAL_UART_GetState(&huart1) == HAL_UART_STATE_READY) {
-        HAL_UART_Transmit_DMA(&huart1, out, UART_TX_HALF);
-    }
+
+
+static uint16_t adc_read(void) {
+
+    ADC1->CR2 |= ADC_CR2_SWSTART;
+
+    while (!(ADC1->SR & ADC_SR_EOC));
+
+    return (uint16_t)ADC1->DR;
+
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
- * ADC DMA Callbacks
- ════════════════════════════════════════════════════════════════════════════ */
-void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef *hadc) {
-    if (hadc->Instance == ADC1) adc_half_rdy = 1;
+
+
+/* ═══════════════════════════════════════════════════
+
+ * USART1 TX (to Raspberry Pi)
+
+ * ═══════════════════════════════════════════════════ */
+
+static void usart1_tx_init(void) {
+
+    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
+
+    RCC->APB2ENR |= RCC_APB2ENR_USART1EN;
+
+
+
+    GPIOA->MODER  |=  (2 << (9 * 2));
+
+    GPIOA->AFR[1] |=  (7 << ((9 - 8) * 4));
+
+
+
+    USART1->BRR = 84000000 / 921600;
+
+    USART1->CR1 = USART_CR1_TE | USART_CR1_UE;
+
 }
 
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
-    if (hadc->Instance == ADC1) adc_full_rdy = 1;
+
+
+static void usart1_send_byte(uint8_t b) {
+
+    while (!(USART1->SR & USART_SR_TXE));
+
+    USART1->DR = b;
+
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
- * main
- ════════════════════════════════════════════════════════════════════════════ */
+
+
+/* ═══════════════════════════════════════════════════
+
+ * I2S3 (speaker output)
+
+ * ═══════════════════════════════════════════════════ */
+
+static void i2s3_init(void) {
+
+    RCC->APB1ENR |= RCC_APB1ENR_SPI3EN;
+
+
+
+    SPI3->I2SCFGR &= ~SPI_I2SCFGR_I2SE;
+
+    SPI3->I2SPR    = 93 | SPI_I2SPR_ODD;
+
+    SPI3->I2SCFGR  = SPI_I2SCFGR_I2SMOD | (2 << SPI_I2SCFGR_I2SCFG_Pos);
+
+    SPI3->I2SCFGR |= SPI_I2SCFGR_I2SE;
+
+}
+
+
+
+/* ═══════════════════════════════════════════════════
+
+ * SPI2 SLAVE (audio in from Raspberry Pi)
+
+ * ═══════════════════════════════════════════════════ */
+
+static void spi2_slave_init(void) {
+
+    RCC->APB1ENR |= RCC_APB1ENR_SPI2EN;
+
+    SPI2->CR1 = SPI_CR1_DFF | SPI_CR1_SPE;
+
+}
+
+
+
+/* ═══════════════════════════════════════════════════
+
+ * GPIO
+
+ * ═══════════════════════════════════════════════════ */
+
+static void gpio_init(void) {
+
+    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN |
+
+                    RCC_AHB1ENR_GPIOBEN |
+
+                    RCC_AHB1ENR_GPIOCEN;
+
+
+
+    // PA5 = debug LED
+
+    GPIOA->MODER |= (1 << (5 * 2));
+
+    GPIOA->ODR   &= ~(1 << 5);
+
+
+
+    // I2S3: PA4=WS, PC10=CK, PC12=SD (AF6)
+
+    GPIOA->MODER  |=  (2 << (4 * 2));
+
+    GPIOA->AFR[0] |=  (6 << (4 * 4));
+
+    GPIOC->MODER  |=  (2 << (10 * 2)) | (2 << (12 * 2));
+
+    GPIOC->AFR[1] |=  (6 << ((10 - 8) * 4)) | (6 << ((12 - 8) * 4));
+
+
+
+    // SPI2: PB12=CS, PB13=CLK, PB15=MOSI (AF5)
+
+    GPIOB->MODER  |=  (2 << (12 * 2)) | (2 << (13 * 2)) | (2 << (15 * 2));
+
+    GPIOB->AFR[1] |=  (5 << ((12 - 8) * 4)) | (5 << ((13 - 8) * 4)) | (5 << ((15 - 8) * 4));
+
+}
+
+
+
+/* ═══════════════════════════════════════════════════
+
+ * MAIN
+
+ * ═══════════════════════════════════════════════════ */
+
 int main(void) {
-    HAL_Init();
-    SystemClock_Config();
 
-    MX_GPIO_Init();
-    MX_DMA_Init();
-    MX_USART1_UART_Init();
-    MX_USART2_UART_Init();
-    MX_ADC1_Init();
-    TIM2_Init_Bare();
+    SystemClock_Config_Bare();
 
-    /* Banner on Mac */
-    uint8_t banner[] = "=== RECORD + PLAYBACK READY ===\r\n";
-    HAL_UART_Transmit(&huart2, banner, sizeof(banner)-1, 1000);
+    gpio_init();
 
-    /* 3 blinks = ready */
-    for (int i = 0; i < 3; i++) {
-        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
-        HAL_Delay(200);
-        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
-        HAL_Delay(200);
-    }
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
+    adc_init();
 
-    /* Start mic ADC DMA */
-    HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc_buf, FULL_BUF_SAMPLES);
+    usart1_tx_init();
 
-    uint8_t  b0, b1;
-    uint32_t sample_count = 0;
-    int32_t  accumulator  = 0;
+    i2s3_init();
+
+    spi2_slave_init();
+
+
 
     while (1) {
-        /* ── RECORD PATH — send mic data to RPi ── */
-        if (adc_half_rdy) {
-            adc_half_rdy = 0;
-            ProcessAndSend(&adc_buf[0], uart_tx_a);
+
+
+
+        /* ════════════════════════════════════════
+
+         * PHASE 0: RECORD (5 seconds)
+
+         * ════════════════════════════════════════ */
+
+        GPIOA->ODR |= (1 << 5);   // LED ON = recording
+
+
+
+        spi2_flush();
+
+
+
+        // Send START marker to RPi
+
+        usart1_send_byte(0xAA);
+
+        usart1_send_byte(0xBB);
+
+
+
+        uint32_t samples_recorded = 0;
+
+        while (samples_recorded < RECORD_SAMPLES) {
+
+            for (volatile uint32_t d = 0; d < 5250; d++);
+
+
+
+            uint16_t raw  = adc_read();
+
+            int32_t  s    = ((int32_t)raw - DC_BIAS) * 16;
+
+            if (s >  32767) s =  32767;
+
+            if (s < -32768) s = -32768;
+
+            int16_t  pcm  = (int16_t)s;
+
+
+
+            usart1_send_byte((uint8_t)(pcm & 0xFF));
+
+            usart1_send_byte((uint8_t)((pcm >> 8) & 0xFF));
+
+            samples_recorded++;
+
         }
-        if (adc_full_rdy) {
-            adc_full_rdy = 0;
-            ProcessAndSend(&adc_buf[HALF_BUF_SAMPLES], uart_tx_b);
-        }
 
-        /* ── PLAYBACK PATH — receive from RPi, drive speaker ── */
-        if (HAL_UART_Receive(&huart1, &b0, 1, 1) == HAL_OK) {
-            if (!(b0 & 0x80)) goto next; // resync
 
-            if (HAL_UART_Receive(&huart1, &b1, 1, 1) != HAL_OK) goto next;
-            if (b1 & 0x80) goto next;
 
-            /* Decode */
-            uint16_t val12 = ((b0 & 0x3F) << 6) | (b1 & 0x3F);
-            int32_t  pcm   = (int32_t)((val12 - 2048) << 4);
+        // Send END marker to RPi
 
-            /* Sigma-delta 8x oversampling */
-            for (int os = 0; os < 8; os++) {
-                accumulator += pcm;
-                if (accumulator >= 0) {
-                    GPIOA->BSRR = GPIO_PIN_8;
-                    accumulator -= 32767;
-                } else {
-                    GPIOA->BSRR = GPIO_PIN_8 << 16;
-                    accumulator += 32767;
+        usart1_send_byte(0xFF);
+
+        usart1_send_byte(0xFE);
+
+
+
+        GPIOA->ODR &= ~(1 << 5);   // LED OFF = done recording, waiting for RPi
+
+
+
+        /* ════════════════════════════════════════
+
+         * PHASE 1: PLAYBACK
+
+         *
+
+         * Design goals:
+
+         *   - Ultra-low latency: start draining after only ~20ms of pre-fill
+
+         *   - Underrun protection: stall I2S drain if buffer goes dangerously low,
+
+         *     then resume once refilled — avoids clicks/pops without hard stopping
+
+         *   - OVR resilience: SPI RX is burst-drained every loop iteration so the
+
+         *     hardware FIFO never overflows
+
+         *   - Natural end: exits when RPi goes silent AND buffer is fully drained
+
+         *   - Debug LED: blinks on live SPI data activity (preserved)
+
+         * ════════════════════════════════════════ */
+
+
+
+        spi2_flush();
+
+
+
+        uint8_t  playback_started  = 0;   // gate: true once pre-fill threshold hit
+
+        uint8_t  underrun_stall    = 0;   // true while recovering from near-empty buffer
+
+        uint8_t  spi_done          = 0;   // true once RPi has gone idle
+
+        uint32_t led_count         = 0;   // LED blink counter (debug)
+
+        uint32_t idle_loops        = 0;   // consecutive loops with no SPI data
+
+
+
+        while (1) {
+
+
+
+            /* ── 1. Burst-drain SPI RX FIFO ──────────────────────────────
+
+             * Pull every available word in a tight inner loop.
+
+             * This is the most critical step — we must never let OVR set.
+
+             * If the buffer is full, we drop the incoming word (not the oldest)
+
+             * to preserve already-queued audio that is currently playing.
+
+             * If your RPi sends faster than the I2S drains, increase BUF_SIZE. */
+
+            uint8_t got_spi = 0;
+
+            while (SPI2->SR & SPI_SR_RXNE) {
+
+                uint16_t sample = SPI2->DR;
+
+                got_spi = 1;
+
+                if (!buf_full()) {
+
+                    buf_push(sample);
+
                 }
-                for (volatile uint32_t d = 0; d < 164; d++);
+
+                // Debug LED: blink every 1600 words received (~100ms of stereo audio)
+
+                if (++led_count >= 1600) {
+
+                    GPIOA->ODR ^= (1 << 5);
+
+                    led_count = 0;
+
+                }
+
             }
 
-            sample_count++;
-            if (sample_count % 16000 == 0) {
-                uint8_t msg[40];
-                int len = snprintf((char*)msg, sizeof(msg),
-                                   "[%lu samples]\r\n", sample_count);
-                HAL_UART_Transmit(&huart2, msg, len, 100);
+
+
+            /* ── 2. Clear OVR immediately after drain ─────────────────────
+
+             * Must happen right after reading DR, not later, or SR is stale. */
+
+            if (SPI2->SR & SPI_SR_OVR) clear_spi_ovr();
+
+
+
+            /* ── 3. End-of-stream detection ───────────────────────────────
+
+             * Count consecutive loops with no SPI activity.
+
+             * Once the RPi finishes sending, idle_loops will exceed the
+
+             * threshold and we mark spi_done to begin final drain. */
+
+            if (!spi_done) {
+
+                if (got_spi) {
+
+                    idle_loops = 0;
+
+                } else {
+
+                    if (++idle_loops >= IDLE_TIMEOUT_LOOPS) {
+
+                        spi_done = 1;
+
+                    }
+
+                }
+
             }
+
+
+
+            /* ── 4. Pre-fill gate ─────────────────────────────────────────
+
+             * Don't start draining until we have at least PREBUF_THRESHOLD
+
+             * words. This gives the I2S peripheral a comfortable runway so
+
+             * the very first drain doesn't immediately starve. */
+
+            uint32_t level = buf_level();
+
+            if (!playback_started && level >= PREBUF_THRESHOLD) {
+
+                playback_started = 1;
+
+                underrun_stall   = 0;
+
+            }
+
+
+
+            /* ── 5. Underrun hysteresis ───────────────────────────────────
+
+             * If the buffer drops below UNDERRUN_GUARD while the RPi is
+
+             * still sending, stall the I2S drain until the buffer refills
+
+             * back to PREBUF_THRESHOLD. This prevents the characteristic
+
+             * click/pop of a starved I2S stream.
+
+             * Once spi_done is set, skip this — just drain everything out. */
+
+            if (playback_started && !spi_done) {
+
+                if (underrun_stall) {
+
+                    if (level >= PREBUF_THRESHOLD) underrun_stall = 0;   // recovered
+
+                } else {
+
+                    if (level < UNDERRUN_GUARD)    underrun_stall = 1;   // too low
+
+                }
+
+            }
+
+
+
+            /* ── 6. Feed I2S TX ───────────────────────────────────────────
+
+             * One word per outer loop iteration. TXE check ensures we never
+
+             * write to a full TX register. Conditions to drain:
+
+             *   - playback has started (pre-fill gate passed)
+
+             *   - not stalled for underrun recovery
+
+             *   - buffer is not empty
+
+             *   - I2S TX register is ready */
+
+            if (playback_started  &&
+
+                !underrun_stall   &&
+
+                !buf_empty()      &&
+
+                (SPI3->SR & SPI_SR_TXE)) {
+
+                SPI3->DR = buf_pop();
+
+            }
+
+
+
+            /* ── 7. Exit ──────────────────────────────────────────────────
+
+             * Only exit once the RPi has gone idle AND the buffer is fully
+
+             * drained. This guarantees we never cut off the tail of audio. */
+
+            if (spi_done && buf_empty()) break;
+
         }
-        next:;
+
+
+
+        /* Playback complete — clean up LED and pause before next cycle */
+
+        GPIOA->ODR &= ~(1 << 5);
+
+        delay_ms(200);
+
     }
-}
 
-/* ════════════════════════════════════════════════════════════════════════════
- * SystemClock_Config — 84MHz
- ════════════════════════════════════════════════════════════════════════════ */
-void SystemClock_Config(void) {
-    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-
-    __HAL_RCC_PWR_CLK_ENABLE();
-    __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
-
-    RCC_OscInitStruct.OscillatorType      = RCC_OSCILLATORTYPE_HSI;
-    RCC_OscInitStruct.HSIState            = RCC_HSI_ON;
-    RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-    RCC_OscInitStruct.PLL.PLLState        = RCC_PLL_ON;
-    RCC_OscInitStruct.PLL.PLLSource       = RCC_PLLSOURCE_HSI;
-    RCC_OscInitStruct.PLL.PLLM            = 16;
-    RCC_OscInitStruct.PLL.PLLN            = 336;
-    RCC_OscInitStruct.PLL.PLLP            = RCC_PLLP_DIV4;
-    RCC_OscInitStruct.PLL.PLLQ            = 4;
-    HAL_RCC_OscConfig(&RCC_OscInitStruct);
-
-    RCC_ClkInitStruct.ClockType      = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK |
-                                       RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
-    RCC_ClkInitStruct.SYSCLKSource   = RCC_SYSCLKSOURCE_PLLCLK;
-    RCC_ClkInitStruct.AHBCLKDivider  = RCC_SYSCLK_DIV1;
-    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
-    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
-    HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2);
-}
-
-/* ════════════════════════════════════════════════════════════════════════════
- * MX_ADC1_Init
- ════════════════════════════════════════════════════════════════════════════ */
-static void MX_ADC1_Init(void) {
-    ADC_ChannelConfTypeDef sConfig = {0};
-
-    hadc1.Instance                   = ADC1;
-    hadc1.Init.ClockPrescaler        = ADC_CLOCK_SYNC_PCLK_DIV4;
-    hadc1.Init.Resolution            = ADC_RESOLUTION_12B;
-    hadc1.Init.ScanConvMode          = DISABLE;
-    hadc1.Init.ContinuousConvMode    = DISABLE;
-    hadc1.Init.DiscontinuousConvMode = DISABLE;
-    hadc1.Init.ExternalTrigConv      = ADC_EXTERNALTRIGCONV_T2_TRGO;
-    hadc1.Init.ExternalTrigConvEdge  = ADC_EXTERNALTRIGCONVEDGE_RISING;
-    hadc1.Init.DataAlign             = ADC_DATAALIGN_RIGHT;
-    hadc1.Init.NbrOfConversion       = 1;
-    hadc1.Init.DMAContinuousRequests = ENABLE;
-    hadc1.Init.EOCSelection          = ADC_EOC_SINGLE_CONV;
-    if (HAL_ADC_Init(&hadc1) != HAL_OK) Error_Handler();
-
-    sConfig.Channel      = ADC_CHANNEL_0;
-    sConfig.Rank         = 1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_84CYCLES;
-    if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) Error_Handler();
-}
-
-/* ════════════════════════════════════════════════════════════════════════════
- * MX_DMA_Init
- ════════════════════════════════════════════════════════════════════════════ */
-static void MX_DMA_Init(void) {
-    __HAL_RCC_DMA2_CLK_ENABLE();
-
-    /* ADC1 -> DMA2 Stream0 Channel0 */
-    hdma_adc1.Instance                 = DMA2_Stream0;
-    hdma_adc1.Init.Channel             = DMA_CHANNEL_0;
-    hdma_adc1.Init.Direction           = DMA_PERIPH_TO_MEMORY;
-    hdma_adc1.Init.PeriphInc           = DMA_PINC_DISABLE;
-    hdma_adc1.Init.MemInc              = DMA_MINC_ENABLE;
-    hdma_adc1.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
-    hdma_adc1.Init.MemDataAlignment    = DMA_MDATAALIGN_HALFWORD;
-    hdma_adc1.Init.Mode                = DMA_CIRCULAR;
-    hdma_adc1.Init.Priority            = DMA_PRIORITY_HIGH;
-    hdma_adc1.Init.FIFOMode            = DMA_FIFOMODE_DISABLE;
-    if (HAL_DMA_Init(&hdma_adc1) != HAL_OK) Error_Handler();
-    __HAL_LINKDMA(&hadc1, DMA_Handle, hdma_adc1);
-    HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
-    HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
-
-    /* USART1 TX -> DMA2 Stream7 Channel4 */
-    hdma_usart1_tx.Instance                 = DMA2_Stream7;
-    hdma_usart1_tx.Init.Channel             = DMA_CHANNEL_4;
-    hdma_usart1_tx.Init.Direction           = DMA_MEMORY_TO_PERIPH;
-    hdma_usart1_tx.Init.PeriphInc           = DMA_PINC_DISABLE;
-    hdma_usart1_tx.Init.MemInc              = DMA_MINC_ENABLE;
-    hdma_usart1_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
-    hdma_usart1_tx.Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;
-    hdma_usart1_tx.Init.Mode                = DMA_NORMAL;
-    hdma_usart1_tx.Init.Priority            = DMA_PRIORITY_MEDIUM;
-    hdma_usart1_tx.Init.FIFOMode            = DMA_FIFOMODE_DISABLE;
-    if (HAL_DMA_Init(&hdma_usart1_tx) != HAL_OK) Error_Handler();
-    __HAL_LINKDMA(&huart1, hdmatx, hdma_usart1_tx);
-    HAL_NVIC_SetPriority(DMA2_Stream7_IRQn, 1, 0);
-    HAL_NVIC_EnableIRQ(DMA2_Stream7_IRQn);
-}
-
-/* ════════════════════════════════════════════════════════════════════════════
- * MX_USART1_UART_Init — 921600 baud TX+RX to RPi
- ════════════════════════════════════════════════════════════════════════════ */
-static void MX_USART1_UART_Init(void) {
-    huart1.Instance          = USART1;
-    huart1.Init.BaudRate     = 921600;
-    huart1.Init.WordLength   = UART_WORDLENGTH_8B;
-    huart1.Init.StopBits     = UART_STOPBITS_1;
-    huart1.Init.Parity       = UART_PARITY_NONE;
-    huart1.Init.Mode         = UART_MODE_TX_RX;
-    huart1.Init.HwFlowCtl    = UART_HWCONTROL_NONE;
-    huart1.Init.OverSampling = UART_OVERSAMPLING_8;
-    if (HAL_UART_Init(&huart1) != HAL_OK) Error_Handler();
-}
-
-/* ════════════════════════════════════════════════════════════════════════════
- * MX_USART2_UART_Init — 115200 TX to Mac via ST-Link
- ════════════════════════════════════════════════════════════════════════════ */
-static void MX_USART2_UART_Init(void) {
-    huart2.Instance          = USART2;
-    huart2.Init.BaudRate     = 115200;
-    huart2.Init.WordLength   = UART_WORDLENGTH_8B;
-    huart2.Init.StopBits     = UART_STOPBITS_1;
-    huart2.Init.Parity       = UART_PARITY_NONE;
-    huart2.Init.Mode         = UART_MODE_TX;
-    huart2.Init.HwFlowCtl    = UART_HWCONTROL_NONE;
-    huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-    if (HAL_UART_Init(&huart2) != HAL_OK) Error_Handler();
-}
-
-/* ════════════════════════════════════════════════════════════════════════════
- * IRQ Handlers
- ════════════════════════════════════════════════════════════════════════════ */
-void DMA2_Stream0_IRQHandler(void) { HAL_DMA_IRQHandler(&hdma_adc1);      }
-void DMA2_Stream7_IRQHandler(void) { HAL_DMA_IRQHandler(&hdma_usart1_tx); }
-void USART1_IRQHandler(void)       { HAL_UART_IRQHandler(&huart1);        }
-
-void Error_Handler(void) {
-    __disable_irq();
-    while (1) {}
 }

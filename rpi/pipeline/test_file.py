@@ -45,7 +45,7 @@ WHISPER_MODEL  = os.path.expanduser('~/whisper.cpp/models/ggml-small.en.bin')
 PIPER_BIN      = os.path.expanduser('~/piper/piper/piper')
 PIPER_MODEL    = os.path.expanduser('~/piper/es_MX-claude-high.onnx')
 
-OUTPUT_DIR     = str(Path(__file__).resolve().parent / "pipeline")
+OUTPUT_DIR     = str(Path(__file__).resolve().parent / "output")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # UART FRAMING (must match STM32 firmware)
@@ -193,7 +193,7 @@ def test_sine(spi, freq=440, duration=3):
     sent = 0
     for i in range(0, len(samples), CHUNK):
         chunk = samples[i:i + CHUNK]
-        packet = struct.pack(f'>{len(chunk)}h', *chunk)
+        packet = struct.pack(f'<{len(chunk)}h', *chunk)
         spi.xfer2(list(packet))
         sent += len(chunk)
         due = sent / SAMPLE_RATE
@@ -301,7 +301,7 @@ def main():
     cycle = 0
 
     try:
-        while True:
+        """ while True:
             cycle += 1
             timestamp = time.strftime('%Y%m%d_%H%M%S')
             print(f"\n{'─' * 50}")
@@ -335,8 +335,8 @@ def main():
             # Step 4: Speak
             synthesize_and_play(spi, spanish_text, piper_wav)
 
-            time.sleep(0.5)
-
+            time.sleep(0.5)  """
+        test_sine(spi, freq=440, duration=60)
 
     except KeyboardInterrupt:
         print("\n\nStopped by user.")
