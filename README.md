@@ -209,6 +209,8 @@ We were able to work through the major components of our project in the MVP DEMO
 
 Below is the explanation for our two processor pipeline, where we have the STM32 Nucleo-F411RE handling real time audio I/O, and the Raspberry Pi 5 runs the full ML inference pipeline. They communicate over a shared UART link at 921,600 baud using a 2-byte framing.
 
+![EDGE MD required 400x400 image](docs/media/project-400x400.jpg)
+
 #### 5.1 STM32 Firmware (`uart-pi/Core/Src/main.c`)
 
 The STM32's primary job is to act as the audio front end, where it initializes the I2S peripheral, drives the amplifier, and streams audio data to/from the Raspberry Pi over UART.
@@ -391,7 +393,7 @@ If you’ve never made a GitHub pages website before, you can follow this webpag
 ### 2. Images
 
 ![Demo Day Design](media/PXL_20260424_174147197.TS-000.MP.jpg)
-![EDGE MD 400x400 website image](docs/media/project-400x400.jpg)
+
 
 ### 3. Results
 
