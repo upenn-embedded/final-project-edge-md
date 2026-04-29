@@ -27,7 +27,8 @@
         <nav>
           <a href="#story">Story</a>
           <a href="#system">System</a>
-          <a href="#progress">Progress</a>
+          <a href="#final-report">Final Report</a>
+          <a href="#validation">Validation</a>
           <a href="#evidence">Evidence</a>
           <a href="#resources">Resources</a>
           <a href="#team">Team</a>
@@ -92,6 +93,114 @@
             <div class="flow-step"><span>3</span><p>Whisper + Llama + Piper on RPi</p></div>
             <div class="flow-step"><span>4</span><p>Play translated output via STM32</p></div>
           </div>
+        </section>
+
+        <section id="final-report" class="panel">
+          <h2>Final Report Deliverables</h2>
+          <p class="muted">This section is the grading checklist source and mirrors the repository README final report section.</p>
+          <h3>Final demo video (required)</h3>
+          <div class="demo-grid">
+            <a
+              class="demo-link"
+              href="https://docs.google.com/videos/d/17sOfWx8P6tt43unIRTZpr-duvIzOP1j-f8Yf377OOpQ/edit?scene=id.p#scene=id.p"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Open final EDGE MD demo video"
+            >
+              <figure class="demo-preview">
+                <img src="./media/dammi-justin-working.JPG" alt="Dammi and Justin working during EDGE MD final demo prep" />
+                <span class="play-badge" aria-hidden="true"></span>
+                <figcaption>Play final demo video</figcaption>
+              </figure>
+            </a>
+            <a
+              class="demo-link"
+              href="https://drive.google.com/file/d/108R2DW3P7sF16c7kGlUdpa54xIzIxAZ2/view?usp=sharing"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Open final demo media folder"
+            >
+              <figure class="demo-preview">
+                <img src="./media/led-indicator-closeup.JPG" alt="Interior electronics and indicator area." />
+                <span class="play-badge" aria-hidden="true"></span>
+                <figcaption>Open demo media folder</figcaption>
+              </figure>
+            </a>
+          </div>
+          <ul>
+            <li>Demonstrates key functionality: audio capture -> STT -> translation -> TTS/playback path.</li>
+            <li>Final demo runtime: 47 seconds (primary demo) and 15 seconds (second clip), both under 5 minutes.</li>
+            <li>Required check before submission: confirm runtime is 5 minutes or less and teaching-team accessibility is enabled.</li>
+            <li>Audio quality requirement: recorded in a controlled environment with clear speech.</li>
+          </ul>
+          <h3>Required product images</h3>
+          <div class="gallery">
+            <figure>
+              <img src="./media/IMG_1792.jpg" alt="EDGE MD final build setup overview" />
+              <figcaption>Final integrated setup.</figcaption>
+            </figure>
+            <figure>
+              <img src="./media/edgemd-3d-print.jpeg" alt="EDGE MD enclosure exterior" />
+              <figcaption>Enclosure exterior / casework progress.</figcaption>
+            </figure>
+            <figure>
+              <img src="./media/led-indicator-closeup.JPG" alt="EDGE MD board and indicator closeup" />
+              <figcaption>Interior electronics and indicator area.</figcaption>
+            </figure>
+            <figure>
+              <img src="./media/project-400x400.jpg" alt="EDGE MD 400 by 400 thumbnail image" />
+              <figcaption>Exactly 400x400 project image for course website usage.</figcaption>
+            </figure>
+            <figure>
+              <img src="./media/final-group-image.jpg" alt="EDGE MD final group photo" />
+              <figcaption>Final group image.</figcaption>
+            </figure>
+          </div>
+        </section>
+
+        <section id="validation" class="panel">
+          <h2>SRS and HRS Validation</h2>
+          <p class="muted">Validated against quantified requirements with direct proof artifacts.</p>
+          <div class="split">
+            <div>
+              <h3>SRS validation (software)</h3>
+              <ul>
+                <li><strong>SRS-01 (STT accuracy):</strong> tested two-sentence low-noise input against ground truth; observed complete transcription match in demo run. <em>Outcome:</em> pass for demonstrated sample.</li>
+                <li><strong>SRS-02 (translation semantic quality):</strong> compared output to expected medical phrasing using BLEU-style checks and native-speaker review during demo. <em>Outcome:</em> pass for demonstrated test phrases.</li>
+                <li><strong>Proof:</strong> demo video, audio output clip, and pipeline screenshots in this page's evidence section.</li>
+              </ul>
+            </div>
+            <div>
+              <h3>HRS validation (hardware)</h3>
+              <ul>
+                <li><strong>HRS-02 (audio input path):</strong> microphone capture tested via STM32 + Pi logging and waveform inspection. <em>Outcome:</em> pass for low-noise speech capture.</li>
+                <li><strong>HRS-03 (near real-time behavior):</strong> full capture-to-output cycle demonstrated in hardware-in-loop MVP testing. <em>Outcome:</em> pass for demo scenarios.</li>
+                <li><strong>Proof:</strong> logic analyzer and oscilloscope captures, bench setup photos, and demo videos.</li>
+              </ul>
+            </div>
+          </div>
+          <h3>Conclusion and reflection</h3>
+          <h4>Justin</h4>
+          <p>
+            While satisfied with the progress we made, I would have laid out a much clearer plan from the beginning and focused more on testing
+            between each stage. For many sessions we hit the same wall repeatedly before switching approaches. A stricter debug checklist and a
+            running log of what worked (and why) would have reduced repeated dead-ends. Even with those challenges, I am proud of the progress and
+            the amount we learned.
+          </p>
+          <h4>Tyrone</h4>
+          <p>
+            This project strengthened my understanding of how to split complex embedded systems into testable units and verify interfaces with
+            lab instruments. For future builds, I would push for a clearer progress map and more explicit task tracking to reduce rework around
+            tricky integration areas like UART/SPI communication. The team dynamic was a major strength, and I now have a much more practical feel
+            for how these protocols should behave in real hardware.
+          </p>
+          <h4>Damodar (Dammi)</h4>
+          <p>
+            Our core vision was a handheld, fully edge-based translation device. We successfully demonstrated audio capture, translation, and output
+            across the pipeline, but we could not fully unify every subsystem into the final seamless flow on the same timeline. We also faced
+            repeated hardware issues (multiple faulty microphones and amplifiers), which consumed valuable debugging time. The project still delivered
+            a strong learning experience in hardware/software co-design, system-level debugging, and planning for integration risk in future builds.
+          </p>
         </section>
 
         <section id="progress" class="panel">
@@ -161,7 +270,7 @@
 
           <div class="evidence-block">
             <h3>1) Concept and System Planning</h3>
-            <div class="gallery">
+            <div class="gallery planning-gallery">
               <figure>
                 <img src="./media/firstSketch.png" alt="EDGE MD design sketch" />
                 <figcaption>Early design sketch that framed the form factor and interaction model.</figcaption>
@@ -242,7 +351,7 @@
             <div>
               <h3>Demo and documentation</h3>
               <div class="links-list">
-                <a href="https://docs.google.com/videos/d/17sOfWx8P6tt43unIRTZpr-duvIzOP1j-f8Yf377OOpQ/edit?usp=sharing" target="_blank" rel="noreferrer">
+                <a href="https://docs.google.com/videos/d/17sOfWx8P6tt43unIRTZpr-duvIzOP1j-f8Yf377OOpQ/edit?scene=id.p#scene=id.p" target="_blank" rel="noreferrer">
                   MVP video walkthrough
                 </a>
                 <a href="https://drive.google.com/file/d/18vrqvzDlqOkMEG6KEYrlbQ28RQISYc8a/view?usp=sharing" target="_blank" rel="noreferrer">

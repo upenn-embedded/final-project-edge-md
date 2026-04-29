@@ -108,7 +108,8 @@ code {
 }
 
 .content {
-  max-width: 1100px;
+  width: 100%;
+  max-width: none;
   padding: 2.1rem 1.25rem;
   display: grid;
   gap: 1.1rem;
@@ -251,6 +252,12 @@ code {
   display: block;
 }
 
+.planning-gallery img {
+  height: 320px;
+  object-fit: contain;
+  background: var(--bg);
+}
+
 .gallery.team-gallery img {
   height: auto;
   aspect-ratio: 4 / 3;
@@ -275,6 +282,73 @@ code {
 
 .gallery figcaption {
   padding: 0.6rem 0.7rem;
+  color: var(--text-dim);
+  font-size: 0.84rem;
+}
+
+.demo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.75rem;
+}
+
+.demo-link {
+  display: block;
+  margin: 0.15rem 0 0.45rem;
+  width: 100%;
+}
+
+.demo-link:hover {
+  text-decoration: none;
+}
+
+.demo-preview {
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+  background: transparent;
+}
+
+.demo-preview img {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  object-fit: cover;
+}
+
+.play-badge {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.play-badge::before {
+  content: "";
+  width: 68px;
+  height: 68px;
+  border-radius: 999px;
+  background: rgba(17, 19, 23, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.play-badge::after {
+  content: "";
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-left: 18px solid rgba(255, 255, 255, 0.95);
+  border-top: 12px solid transparent;
+  border-bottom: 12px solid transparent;
+  transform: translateX(4px);
+}
+
+.demo-preview figcaption {
+  margin: 0;
+  padding: 0.55rem 0.7rem;
   color: var(--text-dim);
   font-size: 0.84rem;
 }
@@ -365,17 +439,17 @@ code {
 .project-timeline::before {
   content: "";
   position: absolute;
-  left: 8px;
+  left: 10px;
   top: 4px;
   bottom: 4px;
-  width: 1px;
-  background: var(--line);
+  width: 2px;
+  background: linear-gradient(to bottom, var(--accent), var(--line));
 }
 
 .project-timeline li {
   position: relative;
-  padding-left: 2rem;
-  margin-bottom: 1.1rem;
+  padding-left: 2.2rem;
+  margin-bottom: 0.95rem;
 }
 
 .project-timeline li:last-child {
@@ -384,18 +458,27 @@ code {
 
 .tl-point {
   position: absolute;
-  left: 3px;
-  top: 0.35rem;
-  width: 11px;
-  height: 11px;
-  border: 1px solid var(--line);
+  left: 2px;
+  top: 0.5rem;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--accent);
   background: var(--panel);
   border-radius: 999px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.tl-body {
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--line));
+  border-radius: 10px;
+  padding: 0.75rem 0.85rem;
+  background: color-mix(in srgb, var(--panel) 88%, var(--accent) 12%);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14);
 }
 
 .tl-body h3 {
   margin: 0.2rem 0 0.35rem;
-  font-size: 1.02rem;
+  font-size: 1.03rem;
 }
 
 .tl-body p {
@@ -407,8 +490,9 @@ code {
   font-size: 0.78rem;
   letter-spacing: 0.03em;
   text-transform: uppercase;
-  color: var(--text-dim);
+  color: var(--accent-strong);
   font-family: var(--font-mono);
+  font-weight: 600;
 }
 
 @media (max-width: 900px) {
